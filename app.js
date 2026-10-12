@@ -1,0 +1,1164 @@
+// ==========================================
+// 1. REGISTRO DE SERVICE WORKER (PWA OFFLINE)
+// ==========================================
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('Service Worker activo'))
+            .catch(err => console.log('SW error:', err));
+    });
+}
+
+// ==========================================
+// 2. ESTADO GLOBAL Y PERSISTENCIA
+// ==========================================
+let movimientos = JSON.parse(localStorage.getItem('mis_movimientos')) || [];
+let presupuestos = JSON.parse(localStorage.getItem('mis_presupuestos')) || {}; // { 'YYYY-MM': monto }
+let metasAhorro = JSON.parse(localStorage.getItem('mis_metas')) || []; // [{ id, nombre, objetivo, actual }]
+let gastosFijos = JSON.parse(localStorage.getItem('mis_gastos_fijos')) || []; // [{ id, desc, monto, cat, metodo }]
+let gastosFijosCargados = JSON.parse(localStorage.getItem('fijos_cargados_meses')) || {}; // { 'YYYY-MM': true }
+let userPin = localStorage.getItem('app_pin') || null;
+
+// Categorías por defecto editables
+let categorias = JSON.parse(localStorage.getItem('mis_categorias')) || [
+    { id: 'Comida', nombre: 'Comida', emoji: '🍔' },
+    { id: 'Transporte', nombre: 'Transporte / Nafta', emoji: '🏍️' },
+    { id: 'Servicios', nombre: 'Servicios / Cuentas', emoji: '💡' },
+    { id: 'Salidas', nombre: 'Salidas / Ocio', emoji: '🍻' },
+    { id: 'Sueldo', nombre: 'Sueldo / Ingreso', emoji: '💼' },
+    { id: 'Salud', nombre: 'Salud / Farmacia', emoji: '💊' },
+    { id: 'Compras', nombre: 'Compras / Ropa', emoji: '🛍️' },
+    { id: 'Otros', nombre: 'Otros', emoji: '📦' }
+];
+
+const iconosMetodo = {
+    'Efectivo': '💵',
+    'Mercado Pago': '📱',
+    'Débito': '💳',
+    'Crédito': '💳',
+    'Transferencia': '🏦'
+};
+
+function guardarEnMemoria() {
+    localStorage.setItem('mis_movimientos', JSON.stringify(movimientos));
+    localStorage.setItem('mis_presupuestos', JSON.stringify(presupuestos));
+    localStorage.setItem('mis_metas', JSON.stringify(metasAhorro));
+    localStorage.setItem('mis_gastos_fijos', JSON.stringify(gastosFijos));
+    localStorage.setItem('fijos_cargados_meses', JSON.stringify(gastosFijosCargados));
+    localStorage.setItem('mis_categorias', JSON.stringify(categorias));
+}
+
+function formatearDinero(cantidad) {
+    return '$' + Number(cantidad).toLocaleString('es-AR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+// Variables de Período y Filtro
+let currentDate = new Date();
+let currentYear = currentDate.getFullYear();
+let currentMonth = currentDate.getMonth();
+let selectedType = 'gasto';
+let currentTicketBase64 = null;
+
+function getPeriodKey(d) {
+    const y = d ? d.getFullYear() : currentYear;
+    const m = d ? d.getMonth() + 1 : currentMonth + 1;
+    return `${y}-${String(m).padStart(2, '0')}`;
+}
+
+const nombresMeses = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+// ==========================================
+// 3. SEGURIDAD: PANTALLA DE BLOQUEO POR PIN
+// ==========================================
+const pinLockscreen = document.getElementById('pin-lockscreen');
+const pinDots = document.querySelectorAll('.pin-dot');
+const pinErrorMsg = document.getElementById('pin-error-msg');
+const btnPinDel = document.getElementById('btn-pin-del');
+const btnPinCancel = document.getElementById('btn-pin-cancel');
+const btnTogglePin = document.getElementById('btn-toggle-pin');
+const pinStatusText = document.getElementById('pin-status-text');
+
+let enteredPin = '';
+
+function checkPinLock() {
+    if (userPin && userPin.length === 4) {
+        pinLockscreen.style.display = 'flex';
+        enteredPin = '';
+        updatePinDots();
+        pinStatusText.textContent = 'Protegido con código PIN de 4 dígitos.';
+        btnTogglePin.textContent = 'Cambiar / Quitar PIN';
+    } else {
+        pinLockscreen.style.display = 'none';
+        pinStatusText.textContent = 'Sin protección de acceso.';
+        btnTogglePin.textContent = 'Activar PIN';
+    }
+}
+
+function updatePinDots() {
+    pinDots.forEach((dot, index) => {
+        if (index < enteredPin.length) {
+            dot.classList.add('filled');
+        } else {
+            dot.classList.remove('filled');
+        }
+    });
+}
+
+document.querySelectorAll('.pin-key[data-digit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (enteredPin.length < 4) {
+            enteredPin += btn.dataset.digit;
+            updatePinDots();
+            if (enteredPin.length === 4) {
+                setTimeout(() => {
+                    if (enteredPin === userPin) {
+                        pinLockscreen.style.display = 'none';
+                        pinErrorMsg.style.display = 'none';
+                    } else {
+                        pinErrorMsg.style.display = 'block';
+                        enteredPin = '';
+                        updatePinDots();
+                    }
+                }, 100);
+            }
+        }
+    });
+});
+
+btnPinDel.addEventListener('click', () => {
+    if (enteredPin.length > 0) {
+        enteredPin = enteredPin.slice(0, -1);
+        updatePinDots();
+    }
+});
+
+btnPinCancel.addEventListener('click', () => {
+    enteredPin = '';
+    updatePinDots();
+});
+
+btnTogglePin.addEventListener('click', () => {
+    if (userPin) {
+        const opcion = confirm('¿Querés QUITAR el PIN de seguridad? (Aceptar para quitar, Cancelar para cambiarlo)');
+        if (opcion) {
+            userPin = null;
+            localStorage.removeItem('app_pin');
+            alert('PIN desactivado.');
+            checkPinLock();
+            return;
+        }
+    }
+    const nuevo = prompt('Ingresá un PIN de 4 números:');
+    if (nuevo) {
+        if (/^\d{4}$/.test(nuevo.trim())) {
+            userPin = nuevo.trim();
+            localStorage.setItem('app_pin', userPin);
+            alert('¡PIN configurado correctamente!');
+            checkPinLock();
+        } else {
+            alert('El PIN debe tener exactamente 4 números.');
+        }
+    }
+});
+
+// ==========================================
+// 4. ELEMENTOS DEL DOM
+// ==========================================
+// Balance
+const balanceTotalEl = document.getElementById('balance-total');
+const totalIngresosEl = document.getElementById('total-ingresos');
+const totalGastosEl = document.getElementById('total-gastos');
+
+// Períodos
+const labelPeriodo = document.getElementById('label-periodo');
+const labelSubperiodo = document.getElementById('label-subperiodo');
+const btnPrevMonth = document.getElementById('btn-prev-month');
+const btnNextMonth = document.getElementById('btn-next-month');
+
+// Presupuesto
+const budgetProgressText = document.getElementById('budget-progress-text');
+const budgetBar = document.getElementById('budget-bar');
+const budgetMsg = document.getElementById('budget-msg');
+const btnSetBudget = document.getElementById('btn-set-budget');
+
+// Banner Gastos Fijos
+const recurringReminderBanner = document.getElementById('recurring-reminder-banner');
+const recurringPendingCount = document.getElementById('recurring-pending-count');
+const btnApplyRecurring = document.getElementById('btn-apply-recurring');
+
+// Tabs
+const tabBtnHistory = document.getElementById('tab-btn-history');
+const tabBtnCharts = document.getElementById('tab-btn-charts');
+const tabBtnGoals = document.getElementById('tab-btn-goals');
+const viewHistory = document.getElementById('view-history');
+const viewCharts = document.getElementById('view-charts');
+const viewGoals = document.getElementById('view-goals');
+
+// Filtros y Búsqueda
+const busquedaInput = document.getElementById('busqueda-input');
+const filtroCategoria = document.getElementById('filtro-categoria');
+const filtroMetodo = document.getElementById('filtro-metodo');
+const listaMovimientos = document.getElementById('lista-movimientos');
+
+// Modal Movimiento
+const modalBackdrop = document.getElementById('modal-backdrop');
+const btnOpenModal = document.getElementById('btn-open-modal');
+const btnCloseModal = document.getElementById('btn-close-modal');
+const form = document.getElementById('transaction-form');
+const switchGasto = document.getElementById('switch-gasto');
+const switchIngreso = document.getElementById('switch-ingreso');
+const montoInput = document.getElementById('monto');
+const descripcionInput = document.getElementById('descripcion');
+const categoriaInput = document.getElementById('categoria');
+const metodoInput = document.getElementById('metodo');
+const cuotasSelect = document.getElementById('cuotas-select');
+const cuotaEstimada = document.getElementById('cuota-estimada');
+const installmentsRow = document.getElementById('installments-row');
+const fechaInput = document.getElementById('fecha');
+const ticketInput = document.getElementById('ticket-input');
+const labelTicketStatus = document.getElementById('label-ticket-status');
+const ticketPreviewBox = document.getElementById('ticket-preview-box');
+const ticketPreviewImg = document.getElementById('ticket-preview-img');
+const btnRemoveTicket = document.getElementById('btn-remove-ticket');
+
+// Modal Ticket Viewer
+const ticketModal = document.getElementById('ticket-modal');
+const ticketFullImg = document.getElementById('ticket-full-img');
+const btnCloseTicketViewer = document.getElementById('btn-close-ticket-viewer');
+
+// Modal Gastos Fijos
+const btnRecurringOpen = document.getElementById('btn-recurring-open');
+const recurringModal = document.getElementById('recurring-modal');
+const btnCloseRecurring = document.getElementById('btn-close-recurring');
+const recurringForm = document.getElementById('recurring-form');
+const recDescInput = document.getElementById('rec-desc');
+const recMontoInput = document.getElementById('rec-monto');
+const recCatSelect = document.getElementById('rec-cat');
+const recMetodoSelect = document.getElementById('rec-metodo');
+const recurringList = document.getElementById('recurring-list');
+
+// Modal Categorías
+const btnOpenCategories = document.getElementById('btn-open-categories');
+const categoriesModal = document.getElementById('categories-modal');
+const btnCloseCategories = document.getElementById('btn-close-categories');
+const categoryForm = document.getElementById('category-form');
+const catEmojiInput = document.getElementById('cat-emoji');
+const catNameInput = document.getElementById('cat-name');
+const categoriesList = document.getElementById('categories-list');
+
+// Metas de Ahorro
+const goalsList = document.getElementById('goals-list');
+const btnNewGoal = document.getElementById('btn-new-goal');
+const goalModal = document.getElementById('goal-modal');
+const btnCloseGoal = document.getElementById('btn-close-goal');
+const goalForm = document.getElementById('goal-form');
+const goalNameInput = document.getElementById('goal-name');
+const goalTargetInput = document.getElementById('goal-target');
+const goalCurrentInput = document.getElementById('goal-current');
+
+// Depósito en Meta
+const goalDepositModal = document.getElementById('goal-deposit-modal');
+const btnCloseDeposit = document.getElementById('btn-close-deposit');
+const goalDepositForm = document.getElementById('goal-deposit-form');
+const depositGoalId = document.getElementById('deposit-goal-id');
+const depositAmount = document.getElementById('deposit-amount');
+const depositGoalTitle = document.getElementById('deposit-goal-title');
+
+// Respaldo
+const btnExportCsv = document.getElementById('btn-export-csv');
+const btnBackup = document.getElementById('btn-backup');
+const backupModal = document.getElementById('backup-modal');
+const btnCloseBackup = document.getElementById('btn-close-backup');
+const btnDownloadBackup = document.getElementById('btn-download-backup');
+const fileRestore = document.getElementById('file-restore');
+const btnClearAll = document.getElementById('btn-clear-all');
+
+// Gráficos
+const chartCanvas = document.getElementById('chart-categorias');
+const chartEmptyMsg = document.getElementById('chart-empty-msg');
+let chartInstance = null;
+
+// ==========================================
+// 5. POBLAR SELECTORES DE CATEGORÍAS
+// ==========================================
+function actualizarSelectoresCategorias() {
+    // 1. Selector en formulario de movimiento
+    categoriaInput.innerHTML = '';
+    // 2. Selector en filtro
+    filtroCategoria.innerHTML = '<option value="Todas">Todas las categorías</option>';
+    // 3. Selector en gastos recurrentes
+    recCatSelect.innerHTML = '';
+
+    categorias.forEach(cat => {
+        const opt1 = document.createElement('option');
+        opt1.value = cat.id;
+        opt1.textContent = `${cat.emoji} ${cat.nombre}`;
+        categoriaInput.appendChild(opt1);
+
+        const opt2 = document.createElement('option');
+        opt2.value = cat.id;
+        opt2.textContent = `${cat.emoji} ${cat.nombre}`;
+        filtroCategoria.appendChild(opt2);
+
+        const opt3 = document.createElement('option');
+        opt3.value = cat.id;
+        opt3.textContent = `${cat.emoji} ${cat.nombre}`;
+        recCatSelect.appendChild(opt3);
+    });
+
+    renderCategoriasList();
+}
+
+function renderCategoriasList() {
+    categoriesList.innerHTML = '';
+    categorias.forEach(cat => {
+        const li = document.createElement('li');
+        li.className = 'category-item';
+        li.innerHTML = `
+            <span>${cat.emoji} <strong>${cat.nombre}</strong></span>
+            <button class="btn-delete" onclick="eliminarCategoria('${cat.id}')">✕</button>
+        `;
+        categoriesList.appendChild(li);
+    });
+}
+
+categoryForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const emoji = catEmojiInput.value.trim() || '🏷️';
+    const nombre = catNameInput.value.trim();
+    if (!nombre) return;
+
+    const id = 'cat_' + Date.now();
+    categorias.push({ id, nombre, emoji });
+    guardarEnMemoria();
+    actualizarSelectoresCategorias();
+    categoryForm.reset();
+});
+
+function eliminarCategoria(catId) {
+    if (categorias.length <= 1) {
+        alert('Tenés que mantener al menos una categoría.');
+        return;
+    }
+    if (confirm('¿Eliminar esta categoría?')) {
+        categorias = categorias.filter(c => c.id !== catId);
+        guardarEnMemoria();
+        actualizarSelectoresCategorias();
+        actualizarPantalla();
+    }
+}
+
+// ==========================================
+// 6. CALCULADORA RÁPIDA EN EL MONTO
+// ==========================================
+// Evalúa operaciones seguras como "1500 + 400 - 50"
+function evaluarMontoMatematico(str) {
+    if (!str) return NaN;
+    // Solo permitir números, +, -, *, /, . y comas
+    const limpio = str.replace(/,/g, '.').replace(/[^0-9+\-*/.]/g, '');
+    try {
+        // Usar Function segura para evaluar operación aritmética simple
+        const res = new Function(`return (${limpio})`)();
+        return typeof res === 'number' && !isNaN(res) ? Math.round(res * 100) / 100 : NaN;
+    } catch {
+        return NaN;
+    }
+}
+
+// Botones de suma rápida (+500, +1000, etc.)
+document.querySelectorAll('.btn-quick-add').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const valorSumar = parseFloat(btn.dataset.add);
+        const actual = evaluarMontoMatematico(montoInput.value) || 0;
+        montoInput.value = (actual + valorSumar).toString();
+        actualizarPreviewCuotas();
+    });
+});
+
+montoInput.addEventListener('input', actualizarPreviewCuotas);
+
+// ==========================================
+// 7. COMPRAS EN CUOTAS CON TARJETA DE CRÉDITO
+// ==========================================
+metodoInput.addEventListener('change', () => {
+    if (metodoInput.value === 'Crédito' && selectedType === 'gasto') {
+        installmentsRow.style.display = 'block';
+    } else {
+        installmentsRow.style.display = 'none';
+        cuotasSelect.value = '1';
+    }
+    actualizarPreviewCuotas();
+});
+
+cuotasSelect.addEventListener('change', actualizarPreviewCuotas);
+
+function actualizarPreviewCuotas() {
+    const numCuotas = parseInt(cuotasSelect.value, 10);
+    const montoTotal = evaluarMontoMatematico(montoInput.value);
+
+    if (numCuotas > 1 && !isNaN(montoTotal) && montoTotal > 0) {
+        const valorCuota = montoTotal / numCuotas;
+        cuotaEstimada.textContent = `(${numCuotas}x ${formatearDinero(valorCuota)})`;
+    } else {
+        cuotaEstimada.textContent = '';
+    }
+}
+
+// ==========================================
+// 8. FOTO / COMPROBANTE DE TICKET (CÁMARA/GALERÍA)
+// ==========================================
+ticketInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        // Comprimir imagen usando un canvas liviano para optimizar memoria
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800;
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = (img.width > MAX_WIDTH) ? MAX_WIDTH : img.width;
+            canvas.height = (img.width > MAX_WIDTH) ? (img.height * scaleSize) : img.height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            currentTicketBase64 = canvas.toDataURL('image/jpeg', 0.7);
+
+            ticketPreviewImg.src = currentTicketBase64;
+            ticketPreviewBox.style.display = 'flex';
+            labelTicketStatus.textContent = 'Ticket cargado ✓';
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+});
+
+btnRemoveTicket.addEventListener('click', () => {
+    currentTicketBase64 = null;
+    ticketInput.value = '';
+    ticketPreviewBox.style.display = 'none';
+    labelTicketStatus.textContent = 'Subir foto';
+});
+
+function verTicketEnGrande(base64) {
+    ticketFullImg.src = base64;
+    ticketModal.classList.add('open');
+}
+
+btnCloseTicketViewer.addEventListener('click', () => {
+    ticketModal.classList.remove('open');
+});
+
+// ==========================================
+// 9. GASTOS FIJOS / RECURRENTES
+// ==========================================
+btnRecurringOpen.addEventListener('click', () => {
+    renderGastosFijos();
+    recurringModal.classList.add('open');
+});
+btnCloseRecurring.addEventListener('click', () => recurringModal.classList.remove('open'));
+recurringModal.addEventListener('click', (e) => {
+    if (e.target === recurringModal) recurringModal.classList.remove('open');
+});
+
+recurringForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const desc = recDescInput.value.trim();
+    const monto = parseFloat(recMontoInput.value);
+    if (!desc || isNaN(monto) || monto <= 0) return;
+
+    gastosFijos.push({
+        id: Date.now(),
+        desc,
+        monto,
+        cat: recCatSelect.value,
+        metodo: recMetodoSelect.value
+    });
+
+    guardarEnMemoria();
+    renderGastosFijos();
+    verificarGastosFijosDelMes();
+    recurringForm.reset();
+});
+
+function renderGastosFijos() {
+    recurringList.innerHTML = '';
+    if (gastosFijos.length === 0) {
+        recurringList.innerHTML = `<li style="text-align:center; color:#71717a; padding: 12px 0;">No agregaste gastos fijos todavía.</li>`;
+        return;
+    }
+    gastosFijos.forEach(item => {
+        const catObj = categorias.find(c => c.id === item.cat);
+        const catEmoji = catObj ? catObj.emoji : '📦';
+        const li = document.createElement('li');
+        li.className = 'recurring-item';
+        li.innerHTML = `
+            <div>
+                <strong>${catEmoji} ${item.desc}</strong>
+                <span style="color:#a1a1aa; font-size:0.75rem; display:block;">${item.metodo}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="color:#ef4444; font-weight:700;">-${formatearDinero(item.monto)}</span>
+                <button class="btn-delete" onclick="eliminarGastoFijo(${item.id})">✕</button>
+            </div>
+        `;
+        recurringList.appendChild(li);
+    });
+}
+
+function eliminarGastoFijo(id) {
+    gastosFijos = gastosFijos.filter(g => g.id !== id);
+    guardarEnMemoria();
+    renderGastosFijos();
+    verificarGastosFijosDelMes();
+}
+
+function verificarGastosFijosDelMes() {
+    const periodKey = getPeriodKey();
+    if (gastosFijos.length > 0 && !gastosFijosCargados[periodKey]) {
+        recurringReminderBanner.style.display = 'flex';
+        recurringPendingCount.textContent = `Tenés ${gastosFijos.length} fijos para ${nombresMeses[currentMonth]}`;
+    } else {
+        recurringReminderBanner.style.display = 'none';
+    }
+}
+
+btnApplyRecurring.addEventListener('click', () => {
+    const periodKey = getPeriodKey();
+    if (confirm(`¿Querés registrar los ${gastosFijos.length} gastos fijos en ${nombresMeses[currentMonth]} ${currentYear}?`)) {
+        const yyyy = currentYear;
+        const mm = String(currentMonth + 1).padStart(2, '0');
+        const fecha = `${yyyy}-${mm}-01`;
+
+        gastosFijos.forEach(item => {
+            movimientos.push({
+                id: Date.now() + Math.floor(Math.random() * 1000),
+                descripcion: `[Fijo] ${item.desc}`,
+                monto: item.monto,
+                tipo: 'gasto',
+                categoria: item.cat,
+                metodo: item.metodo,
+                fecha: fecha,
+                cuotaActual: 1,
+                cuotasTotales: 1,
+                ticket: null
+            });
+        });
+
+        gastosFijosCargados[periodKey] = true;
+        guardarEnMemoria();
+        actualizarPantalla();
+        alert('¡Gastos fijos aplicados exitosamente!');
+    }
+});
+
+// ==========================================
+// 10. METAS DE AHORRO (CHANCITO VIRTUAL)
+// ==========================================
+btnNewGoal.addEventListener('click', () => {
+    goalForm.reset();
+    goalModal.classList.add('open');
+});
+btnCloseGoal.addEventListener('click', () => goalModal.classList.remove('open'));
+goalModal.addEventListener('click', (e) => {
+    if (e.target === goalModal) goalModal.classList.remove('open');
+});
+
+goalForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const nombre = goalNameInput.value.trim();
+    const objetivo = parseFloat(goalTargetInput.value);
+    const actual = parseFloat(goalCurrentInput.value) || 0;
+
+    if (!nombre || isNaN(objetivo) || objetivo <= 0) return;
+
+    metasAhorro.push({
+        id: Date.now(),
+        nombre,
+        objetivo,
+        actual
+    });
+
+    guardarEnMemoria();
+    goalModal.classList.remove('open');
+    renderMetas();
+});
+
+function renderMetas() {
+    goalsList.innerHTML = '';
+    if (metasAhorro.length === 0) {
+        goalsList.innerHTML = `<p style="text-align:center; color:#71717a; padding:30px 0;">No creaste metas aún. ¡Tocá "+ Nueva Meta" para empezar a ahorrar!</p>`;
+        return;
+    }
+
+    metasAhorro.forEach(meta => {
+        const porc = Math.min(100, Math.round((meta.actual / meta.objetivo) * 100));
+        const div = document.createElement('div');
+        div.className = 'goal-card';
+        div.innerHTML = `
+            <div class="goal-card-top">
+                <strong>🐷 ${meta.nombre}</strong>
+                <button class="btn-delete" onclick="eliminarMeta(${meta.id})">✕</button>
+            </div>
+            <div class="goal-amounts">
+                <span>${formatearDinero(meta.actual)}</span> ahorrados de ${formatearDinero(meta.objetivo)}
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width: ${porc}%; background: ${porc >= 100 ? '#10b981' : '#6366f1'};"></div>
+            </div>
+            <div class="goal-card-actions">
+                <span class="goal-percent">${porc}% completado</span>
+                <div class="goal-btns">
+                    <button class="btn-sm-primary" onclick="abrirAporteMeta(${meta.id}, '${meta.nombre}')">+ Sumar Ahorro</button>
+                </div>
+            </div>
+        `;
+        goalsList.appendChild(div);
+    });
+}
+
+function abrirAporteMeta(id, nombre) {
+    depositGoalId.value = id;
+    depositGoalTitle.textContent = `Sumar a: ${nombre}`;
+    depositAmount.value = '';
+    goalDepositModal.classList.add('open');
+    setTimeout(() => depositAmount.focus(), 150);
+}
+
+btnCloseDeposit.addEventListener('click', () => goalDepositModal.classList.remove('open'));
+goalDepositModal.addEventListener('click', (e) => {
+    if (e.target === goalDepositModal) goalDepositModal.classList.remove('open');
+});
+
+goalDepositForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const id = parseInt(depositGoalId.value, 10);
+    const monto = parseFloat(depositAmount.value);
+    if (isNaN(monto) || monto <= 0) return;
+
+    const meta = metasAhorro.find(m => m.id === id);
+    if (meta) {
+        meta.actual += monto;
+        guardarEnMemoria();
+        renderMetas();
+        goalDepositModal.classList.remove('open');
+    }
+});
+
+function eliminarMeta(id) {
+    if (confirm('¿Eliminar esta meta de ahorro?')) {
+        metasAhorro = metasAhorro.filter(m => m.id !== id);
+        guardarEnMemoria();
+        renderMetas();
+    }
+}
+
+// ==========================================
+// 11. ACTUALIZAR PANTALLA PRINCIPAL
+// ==========================================
+function actualizarHeaderPeriodo() {
+    labelPeriodo.textContent = `${nombresMeses[currentMonth]} ${currentYear}`;
+    const hoy = new Date();
+    if (currentYear === hoy.getFullYear() && currentMonth === hoy.getMonth()) {
+        labelSubperiodo.textContent = 'Mes en curso';
+    } else {
+        labelSubperiodo.textContent = 'Histórico mensual';
+    }
+}
+
+btnPrevMonth.addEventListener('click', () => {
+    currentMonth--;
+    if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear--;
+    }
+    actualizarPantalla();
+});
+
+btnNextMonth.addEventListener('click', () => {
+    currentMonth++;
+    if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+    }
+    actualizarPantalla();
+});
+
+function actualizarPantalla() {
+    actualizarHeaderPeriodo();
+    verificarGastosFijosDelMes();
+
+    const periodKey = getPeriodKey();
+    const textoBusqueda = busquedaInput.value.toLowerCase().trim();
+    const catFiltro = filtroCategoria.value;
+    const metodoFiltro = filtroMetodo.value;
+
+    // Filtrar movimientos del mes en curso
+    const movimientosDelMes = movimientos.filter(mov => {
+        if (!mov.fecha) return true;
+        return mov.fecha.startsWith(periodKey);
+    });
+
+    let sumaIngresos = 0;
+    let sumaGastos = 0;
+
+    movimientosDelMes.forEach(mov => {
+        if (mov.tipo === 'ingreso') {
+            sumaIngresos += mov.monto;
+        } else {
+            sumaGastos += mov.monto;
+        }
+    });
+
+    const balanceMes = sumaIngresos - sumaGastos;
+    balanceTotalEl.textContent = formatearDinero(balanceMes);
+    totalIngresosEl.textContent = '+' + formatearDinero(sumaIngresos);
+    totalGastosEl.textContent = '-' + formatearDinero(sumaGastos);
+
+    actualizarWidgetPresupuesto(sumaGastos, periodKey);
+
+    // Filtrar lista
+    const movimientosFiltrados = movimientosDelMes.filter(mov => {
+        const coincideCat = (catFiltro === 'Todas' || mov.categoria === catFiltro);
+        const coincideMetodo = (metodoFiltro === 'Todos' || mov.metodo === metodoFiltro);
+        const coincideBusqueda = mov.descripcion.toLowerCase().includes(textoBusqueda);
+        return coincideCat && coincideMetodo && coincideBusqueda;
+    });
+
+    // Renderizar
+    listaMovimientos.innerHTML = '';
+    if (movimientosFiltrados.length === 0) {
+        listaMovimientos.innerHTML = `<li style="text-align:center; color:#71717a; padding: 28px 0; font-size: 0.9rem;">No hay movimientos para este período.</li>`;
+    } else {
+        movimientosFiltrados.slice().reverse().forEach(mov => {
+            const li = document.createElement('li');
+            li.classList.add('transaction-item', mov.tipo);
+
+            const signo = mov.tipo === 'ingreso' ? '+' : '-';
+            const catObj = categorias.find(c => c.id === mov.categoria);
+            const catLabel = catObj ? `${catObj.emoji} ${catObj.nombre}` : (mov.categoria || 'Otros');
+            const metodoIcon = iconosMetodo[mov.metodo] || '💳';
+            const metodoTexto = mov.metodo ? `${metodoIcon} ${mov.metodo}` : '';
+            const fechaCorta = mov.fecha ? `${mov.fecha.split('-')[2]}/${mov.fecha.split('-')[1]}` : '';
+
+            // Badge cuotas si aplica
+            const cuotasHtml = (mov.cuotasTotales && mov.cuotasTotales > 1) 
+                ? `<span class="badge-cuota">Cuota ${mov.cuotaActual}/${mov.cuotasTotales}</span>` 
+                : '';
+
+            // Botón ticket si tiene foto adjunta
+            const ticketBtn = mov.ticket
+                ? `<button class="badge-ticket-btn" onclick="verTicketEnGrande('${mov.ticket}')" title="Ver foto ticket">📸 Ticket</button>`
+                : '';
+
+            li.innerHTML = `
+                <div class="item-info">
+                    <strong>${mov.descripcion}</strong>
+                    <div class="item-badges">
+                        <span class="badge">${catLabel}</span>
+                        ${metodoTexto ? `<span class="badge">${metodoTexto}</span>` : ''}
+                        ${cuotasHtml}
+                        ${ticketBtn}
+                        ${fechaCorta ? `<span class="badge-date">📅 ${fechaCorta}</span>` : ''}
+                    </div>
+                </div>
+                <div class="item-amount">
+                    <span>${signo}${formatearDinero(mov.monto)}</span>
+                    <button class="btn-delete" onclick="eliminarMovimiento(${mov.id})" title="Eliminar">✕</button>
+                </div>
+            `;
+            listaMovimientos.appendChild(li);
+        });
+    }
+
+    actualizarGrafico(movimientosDelMes);
+}
+
+// Presupuesto
+function actualizarWidgetPresupuesto(totalGastosMes, periodKey) {
+    const limite = presupuestos[periodKey] || 0;
+
+    if (limite > 0) {
+        budgetProgressText.textContent = `${formatearDinero(totalGastosMes)} / ${formatearDinero(limite)}`;
+        const porcentaje = Math.min(100, Math.round((totalGastosMes / limite) * 100));
+        budgetBar.style.width = `${porcentaje}%`;
+
+        budgetBar.className = 'progress-bar-fill';
+        if (porcentaje >= 100) {
+            budgetBar.classList.add('danger');
+            budgetMsg.textContent = `⚠️ ¡Superaste tu presupuesto por ${formatearDinero(totalGastosMes - limite)}!`;
+            budgetMsg.style.color = '#ef4444';
+        } else if (porcentaje >= 80) {
+            budgetBar.classList.add('warning');
+            budgetMsg.textContent = `Aviso: Ya usaste el ${porcentaje}% de tu presupuesto.`;
+            budgetMsg.style.color = '#f59e0b';
+        } else {
+            const disponible = limite - totalGastosMes;
+            budgetMsg.textContent = `Te quedan ${formatearDinero(disponible)} disponibles este mes.`;
+            budgetMsg.style.color = '#a1a1aa';
+        }
+    } else {
+        budgetProgressText.textContent = `${formatearDinero(totalGastosMes)} gastados`;
+        budgetBar.style.width = '0%';
+        budgetMsg.textContent = 'Tocá "Definir Límite" para controlar tus gastos este mes.';
+        budgetMsg.style.color = '#a1a1aa';
+    }
+}
+
+btnSetBudget.addEventListener('click', () => {
+    const periodKey = getPeriodKey();
+    const actual = presupuestos[periodKey] || '';
+    const nuevo = prompt(`Presupuesto límite de gastos para ${nombresMeses[currentMonth]} ${currentYear} ($):`, actual);
+
+    if (nuevo !== null) {
+        const val = parseFloat(nuevo);
+        if (!isNaN(val) && val > 0) {
+            presupuestos[periodKey] = val;
+        } else if (nuevo.trim() === '' || val === 0) {
+            delete presupuestos[periodKey];
+        }
+        guardarEnMemoria();
+        actualizarPantalla();
+    }
+});
+
+// Gráficos
+function actualizarGrafico(movimientosMes) {
+    if (typeof Chart === 'undefined') return;
+
+    const gastosPorCat = {};
+    movimientosMes.forEach(mov => {
+        if (mov.tipo === 'gasto') {
+            const catObj = categorias.find(c => c.id === mov.categoria);
+            const nombre = catObj ? `${catObj.emoji} ${catObj.nombre}` : (mov.categoria || 'Otros');
+            gastosPorCat[nombre] = (gastosPorCat[nombre] || 0) + mov.monto;
+        }
+    });
+
+    const labels = Object.keys(gastosPorCat);
+    const data = Object.values(gastosPorCat);
+
+    if (labels.length === 0) {
+        if (chartInstance) chartInstance.destroy();
+        chartCanvas.style.display = 'none';
+        chartEmptyMsg.style.display = 'block';
+        return;
+    }
+
+    chartCanvas.style.display = 'block';
+    chartEmptyMsg.style.display = 'none';
+
+    const colores = [
+        '#6366f1', '#ec4899', '#f59e0b', '#10b981',
+        '#06b6d4', '#8b5cf6', '#f97316', '#a855f7', '#64748b'
+    ];
+
+    if (chartInstance) chartInstance.destroy();
+
+    chartInstance = new Chart(chartCanvas, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colores.slice(0, labels.length),
+                borderColor: '#18181b',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#f4f4f5',
+                        boxWidth: 12,
+                        padding: 12,
+                        font: { size: 11 }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return ` ${context.label}: $${context.raw.toLocaleString('es-AR')}`;
+                        }
+                    }
+                }
+            },
+            cutout: '65%'
+        }
+    });
+}
+
+// ==========================================
+// 12. AGREGAR NUEVO MOVIMIENTO CON CUOTAS
+// ==========================================
+function setModalType(tipo) {
+    selectedType = tipo;
+    if (tipo === 'gasto') {
+        switchGasto.classList.add('active');
+        switchIngreso.classList.remove('active');
+        if (metodoInput.value === 'Crédito') installmentsRow.style.display = 'block';
+    } else {
+        switchIngreso.classList.add('active');
+        switchGasto.classList.remove('active');
+        installmentsRow.style.display = 'none';
+    }
+}
+
+switchGasto.addEventListener('click', () => setModalType('gasto'));
+switchIngreso.addEventListener('click', () => setModalType('ingreso'));
+
+function setDefaultDate() {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    fechaInput.value = `${yyyy}-${mm}-${dd}`;
+}
+
+btnOpenModal.addEventListener('click', () => {
+    form.reset();
+    setDefaultDate();
+    setModalType('gasto');
+    installmentsRow.style.display = 'none';
+    currentTicketBase64 = null;
+    ticketPreviewBox.style.display = 'none';
+    labelTicketStatus.textContent = 'Subir foto';
+    cuotaEstimada.textContent = '';
+    modalBackdrop.classList.add('open');
+    setTimeout(() => montoInput.focus(), 150);
+});
+
+btnCloseModal.addEventListener('click', () => modalBackdrop.classList.remove('open'));
+modalBackdrop.addEventListener('click', (e) => {
+    if (e.target === modalBackdrop) modalBackdrop.classList.remove('open');
+});
+
+form.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const montoCalculado = evaluarMontoMatematico(montoInput.value);
+    if (isNaN(montoCalculado) || montoCalculado <= 0) {
+        alert('Por favor ingresá un monto válido (ej: 2500 o 1500+1000).');
+        return;
+    }
+
+    const fechaSeleccionada = fechaInput.value;
+    const numCuotas = (selectedType === 'gasto' && metodoInput.value === 'Crédito') 
+        ? parseInt(cuotasSelect.value, 10) 
+        : 1;
+
+    // Si es en cuotas, proyectamos los gastos en cada mes correspondiente
+    if (numCuotas > 1) {
+        const montoPorCuota = Math.round((montoCalculado / numCuotas) * 100) / 100;
+        const [baseY, baseM, baseD] = fechaSeleccionada.split('-').map(Number);
+
+        for (let i = 0; i < numCuotas; i++) {
+            // Fecha para el mes correspondiente (i meses después)
+            const cuotaDate = new Date(baseY, (baseM - 1) + i, baseD);
+            const cY = cuotaDate.getFullYear();
+            const cM = String(cuotaDate.getMonth() + 1).padStart(2, '0');
+            const cD = String(cuotaDate.getDate()).padStart(2, '0');
+            const cuotaFechaStr = `${cY}-${cM}-${cD}`;
+
+            movimientos.push({
+                id: Date.now() + i,
+                descripcion: descripcionInput.value.trim(),
+                monto: montoPorCuota,
+                tipo: 'gasto',
+                categoria: categoriaInput.value,
+                metodo: 'Crédito',
+                fecha: cuotaFechaStr,
+                cuotaActual: i + 1,
+                cuotasTotales: numCuotas,
+                ticket: (i === 0) ? currentTicketBase64 : null // Adjuntar ticket solo a cuota 1
+            });
+        }
+    } else {
+        movimientos.push({
+            id: Date.now(),
+            descripcion: descripcionInput.value.trim(),
+            monto: montoCalculado,
+            tipo: selectedType,
+            categoria: categoriaInput.value,
+            metodo: metodoInput.value,
+            fecha: fechaSeleccionada,
+            cuotaActual: 1,
+            cuotasTotales: 1,
+            ticket: currentTicketBase64
+        });
+    }
+
+    guardarEnMemoria();
+
+    if (fechaSeleccionada) {
+        const [y, m] = fechaSeleccionada.split('-');
+        currentYear = parseInt(y, 10);
+        currentMonth = parseInt(m, 10) - 1;
+    }
+
+    modalBackdrop.classList.remove('open');
+    actualizarPantalla();
+});
+
+function eliminarMovimiento(id) {
+    if (confirm('¿Eliminar este movimiento?')) {
+        movimientos = movimientos.filter(m => m.id !== id);
+        guardarEnMemoria();
+        actualizarPantalla();
+    }
+}
+
+// ==========================================
+// 13. PESTAÑAS (MOVIMIENTOS / STATS / METAS)
+// ==========================================
+function switchTab(activeBtn, activePanel) {
+    [tabBtnHistory, tabBtnCharts, tabBtnGoals].forEach(b => b.classList.remove('active'));
+    [viewHistory, viewCharts, viewGoals].forEach(p => p.classList.remove('active'));
+    activeBtn.classList.add('active');
+    activePanel.classList.add('active');
+}
+
+tabBtnHistory.addEventListener('click', () => switchTab(tabBtnHistory, viewHistory));
+tabBtnCharts.addEventListener('click', () => {
+    switchTab(tabBtnCharts, viewCharts);
+    if (chartInstance) chartInstance.resize();
+});
+tabBtnGoals.addEventListener('click', () => {
+    switchTab(tabBtnGoals, viewGoals);
+    renderMetas();
+});
+
+busquedaInput.addEventListener('input', actualizarPantalla);
+filtroCategoria.addEventListener('change', actualizarPantalla);
+filtroMetodo.addEventListener('change', actualizarPantalla);
+
+// ==========================================
+// 14. EXPORTAR A EXCEL (CSV) Y RESPALDO COMPLETO
+// ==========================================
+btnExportCsv.addEventListener('click', () => {
+    if (movimientos.length === 0) {
+        alert('No tenés movimientos para exportar.');
+        return;
+    }
+
+    let csv = '\uFEFFFecha;Tipo;Descripcion;Categoria;Metodo;Cuotas;Monto\n';
+    movimientos.forEach(m => {
+        const catObj = categorias.find(c => c.id === m.categoria);
+        const catName = catObj ? catObj.nombre : (m.categoria || '');
+        const cuotaStr = (m.cuotasTotales > 1) ? `${m.cuotaActual}/${m.cuotasTotales}` : '1';
+        csv += `"${m.fecha || ''}";"${m.tipo}";"${m.descripcion}";"${catName}";"${m.metodo || ''}";"${cuotaStr}";"${m.monto}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `finanzas_backup_${getPeriodKey()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+});
+
+// Modal Ajustes y Respaldo
+btnBackup.addEventListener('click', () => {
+    checkPinLock();
+    backupModal.classList.add('open');
+});
+btnCloseBackup.addEventListener('click', () => backupModal.classList.remove('open'));
+backupModal.addEventListener('click', (e) => {
+    if (e.target === backupModal) backupModal.classList.remove('open');
+});
+
+// Administrar Categorías
+btnOpenCategories.addEventListener('click', () => {
+    backupModal.classList.remove('open');
+    categoriesModal.classList.add('open');
+});
+btnCloseCategories.addEventListener('click', () => categoriesModal.classList.remove('open'));
+categoriesModal.addEventListener('click', (e) => {
+    if (e.target === categoriesModal) categoriesModal.classList.remove('open');
+});
+
+// Descargar Copia JSON
+btnDownloadBackup.addEventListener('click', () => {
+    const data = {
+        movimientos,
+        presupuestos,
+        metasAhorro,
+        gastosFijos,
+        categorias,
+        fechaExportacion: new Date().toISOString()
+    };
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `respaldo_finanzas_pro_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+});
+
+// Restaurar Copia JSON
+fileRestore.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        try {
+            const parsed = JSON.parse(event.target.result);
+            if (Array.isArray(parsed.movimientos)) {
+                movimientos = parsed.movimientos;
+                presupuestos = parsed.presupuestos || {};
+                metasAhorro = parsed.metasAhorro || [];
+                gastosFijos = parsed.gastosFijos || [];
+                if (Array.isArray(parsed.categorias)) categorias = parsed.categorias;
+                guardarEnMemoria();
+                actualizarSelectoresCategorias();
+                actualizarPantalla();
+                backupModal.classList.remove('open');
+                alert('¡Copia de respaldo restaurada con éxito!');
+            } else {
+                alert('El archivo no contiene un formato de respaldo válido.');
+            }
+        } catch {
+            alert('Error al leer el archivo de respaldo.');
+        }
+    };
+    reader.readAsText(file);
+});
+
+// Borrar Todo
+btnClearAll.addEventListener('click', () => {
+    if (confirm('¿Estás seguro de que querés borrar TODOS tus datos?')) {
+        movimientos = [];
+        presupuestos = {};
+        metasAhorro = [];
+        gastosFijos = [];
+        gastosFijosCargados = {};
+        guardarEnMemoria();
+        actualizarPantalla();
+        renderMetas();
+        backupModal.classList.remove('open');
+        alert('Se borraron todos los datos.');
+    }
+});
+
+// ==========================================
+// 15. INICIALIZACIÓN
+// ==========================================
+actualizarSelectoresCategorias();
+actualizarPantalla();
+checkPinLock();

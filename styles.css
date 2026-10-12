@@ -1,0 +1,1168 @@
+/* Reset y Variables Globales */
+:root {
+    --bg-dark: #09090b;
+    --card-bg: #121214;
+    --subcard-bg: #18181b;
+    --input-bg: #222226;
+    --border-color: #27272a;
+    --border-highlight: #3f3f46;
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --purple: #a855f7;
+    --text-white: #f4f4f5;
+    --text-muted: #a1a1aa;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-white);
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* Pantalla de Bloqueo por PIN */
+.pin-lockscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #09090b;
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.pin-box {
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+}
+
+.pin-icon {
+    font-size: 2.8rem;
+}
+
+.pin-box h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.pin-box p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.pin-dots {
+    display: flex;
+    gap: 16px;
+    margin: 12px 0 20px 0;
+}
+
+.pin-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--border-highlight);
+    transition: all 0.2s ease;
+}
+
+.pin-dot.filled {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    transform: scale(1.15);
+}
+
+.pin-keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    width: 100%;
+}
+
+.pin-key {
+    background: var(--subcard-bg);
+    border: 1px solid var(--border-color);
+    color: #fff;
+    font-size: 1.5rem;
+    font-weight: 600;
+    height: 64px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.pin-key:active {
+    background: var(--primary);
+    transform: scale(0.92);
+}
+
+.pin-key.action {
+    background: transparent;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--text-muted);
+}
+
+.pin-error {
+    color: var(--red);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* Contenedor tipo pantalla móvil */
+.app-container {
+    width: 100%;
+    max-width: 440px;
+    background-color: var(--card-bg);
+    min-height: 100vh;
+    padding: 16px 16px 85px 16px;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    position: relative;
+}
+
+/* Top Nav */
+.top-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 2px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-icon {
+    font-size: 1.4rem;
+}
+
+.brand h1 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.1;
+}
+
+.pro-tag {
+    font-size: 0.62rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #a855f7, #6366f1);
+    color: #fff;
+    padding: 1px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    display: inline-block;
+}
+
+.nav-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.icon-btn {
+    background: var(--subcard-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-white);
+    font-size: 1.05rem;
+    padding: 7px 9px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.icon-btn:active {
+    transform: scale(0.92);
+}
+
+/* Selector de Período */
+.period-selector-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--subcard-bg);
+    border: 1px solid var(--border-color);
+    padding: 10px 14px;
+    border-radius: 14px;
+}
+
+.period-arrow {
+    background: var(--input-bg);
+    border: 1px solid var(--border-highlight);
+    color: var(--text-white);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 1.3rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.period-arrow:active {
+    transform: scale(0.9);
+}
+
+.period-info {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+
+.period-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-white);
+    text-transform: capitalize;
+}
+
+.period-subtitle {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+/* Tarjeta Principal de Balance */
+.balance-card {
+    background: linear-gradient(145deg, #1f1f24 0%, #16161a 100%);
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid var(--border-highlight);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    text-align: center;
+}
+
+.balance-label {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 500;
+}
+
+.balance-card h2 {
+    font-size: 2.1rem;
+    font-weight: 800;
+    margin: 5px 0 14px 0;
+    color: #ffffff;
+    letter-spacing: -0.5px;
+}
+
+.summary-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.summary-box {
+    background-color: rgba(24, 24, 27, 0.7);
+    padding: 11px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.summary-box span {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+}
+
+.summary-box p {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-top: 3px;
+}
+
+.summary-box.ingreso p {
+    color: var(--green);
+}
+
+.summary-box.gasto p {
+    color: var(--red);
+}
+
+/* Tarjeta de Presupuesto */
+.budget-card {
+    background-color: var(--subcard-bg);
+    border: 1px solid var(--border-color);
+    padding: 12px 14px;
+    border-radius: 14px;
+}
+
+.budget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 7px;
+}
+
+.budget-label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.budget-header strong {
+    font-size: 0.86rem;
+    color: var(--text-white);
+}
+
+.btn-text {
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background-color: var(--input-bg);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    border-radius: 10px;
+    background: var(--green);
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.progress-bar-fill.warning {
+    background: var(--yellow);
+}
+
+.progress-bar-fill.danger {
+    background: var(--red);
+}
+
+.budget-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+/* Banner de Gastos Fijos Pendientes */
+.recurring-reminder-banner {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.15));
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    padding: 10px 14px;
+    border-radius: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.reminder-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.reminder-text strong {
+    font-size: 0.85rem;
+    color: #fff;
+}
+
+.reminder-text span {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.btn-sm-primary {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-sm-primary:active {
+    background: var(--primary-hover);
+}
+
+/* Pestañas de Navegación */
+.tab-switcher {
+    display: flex;
+    background: var(--subcard-bg);
+    padding: 4px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.tab-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    padding: 8px 0;
+    font-size: 0.84rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab-btn.active {
+    background: var(--input-bg);
+    color: var(--text-white);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* Paneles de Vista */
+.view-panel {
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.view-panel.active {
+    display: flex;
+}
+
+/* Buscador y Filtros */
+.search-filter-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#busqueda-input {
+    width: 100%;
+    background: var(--subcard-bg);
+    border: 1px solid var(--border-color);
+    padding: 10px 14px;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+#busqueda-input:focus {
+    border-color: var(--primary);
+}
+
+.filter-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.filter-row select {
+    background: var(--subcard-bg);
+    border: 1px solid var(--border-color);
+    padding: 8px 10px;
+    border-radius: 10px;
+    color: var(--text-white);
+    font-size: 0.8rem;
+    outline: none;
+}
+
+/* Lista de Movimientos */
+.transaction-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.transaction-item {
+    background-color: var(--subcard-bg);
+    padding: 12px 14px;
+    border-radius: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 4px solid transparent;
+    border-top: 1px solid rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.transaction-item.ingreso {
+    border-left-color: var(--green);
+}
+
+.transaction-item.gasto {
+    border-left-color: var(--red);
+}
+
+.item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.item-info strong {
+    font-size: 0.92rem;
+    color: var(--text-white);
+}
+
+.item-badges {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.badge {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    background-color: var(--input-bg);
+    padding: 2px 7px;
+    border-radius: 6px;
+}
+
+.badge-cuota {
+    font-size: 0.68rem;
+    color: var(--yellow);
+    background-color: rgba(245, 158, 11, 0.15);
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.badge-ticket-btn {
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0 2px;
+}
+
+.badge-date {
+    font-size: 0.68rem;
+    color: #71717a;
+}
+
+.item-amount {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.transaction-item.ingreso .item-amount span {
+    color: var(--green);
+}
+
+.transaction-item.gasto .item-amount span {
+    color: var(--red);
+}
+
+.btn-delete {
+    background: none;
+    border: none;
+    color: #71717a;
+    cursor: pointer;
+    font-size: 0.95rem;
+    padding: 6px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-delete:hover,
+.btn-delete:active {
+    color: var(--red);
+    background-color: rgba(239, 68, 68, 0.12);
+}
+
+/* Metas de Ahorro (Alcancías) */
+.goals-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.goals-header h3 {
+    font-size: 1.05rem;
+    color: #fff;
+}
+
+.goals-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.goal-card {
+    background: var(--subcard-bg);
+    border: 1px solid var(--border-color);
+    padding: 14px 16px;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.goal-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.goal-card-top strong {
+    font-size: 0.95rem;
+    color: #fff;
+}
+
+.goal-amounts {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.goal-amounts span {
+    color: var(--green);
+    font-weight: 700;
+}
+
+.goal-card-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.goal-percent {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.goal-btns {
+    display: flex;
+    gap: 8px;
+}
+
+/* Gráficos */
+.chart-card {
+    background: var(--subcard-bg);
+    border: 1px solid var(--border-color);
+    padding: 16px;
+    border-radius: 16px;
+    text-align: center;
+}
+
+.chart-card h4 {
+    font-size: 0.95rem;
+    color: var(--text-white);
+    margin-bottom: 14px;
+}
+
+.canvas-container {
+    position: relative;
+    max-height: 280px;
+    margin: 0 auto;
+}
+
+.empty-chart-text {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    padding: 30px 10px;
+}
+
+/* Botón Flotante Acción Principal (FAB) */
+.fab-button {
+    position: fixed;
+    bottom: 24px;
+    right: max(20px, calc(50% - 200px));
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+    color: #fff;
+    border: none;
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    cursor: pointer;
+    z-index: 90;
+    transition: transform 0.15s;
+}
+
+.fab-button:active {
+    transform: scale(0.92);
+}
+
+/* Modales Deslizables (Bottom Sheet) */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: none;
+    justify-content: center;
+    align-items: flex-end;
+}
+
+.modal-backdrop.open {
+    display: flex;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-sheet {
+    width: 100%;
+    max-width: 440px;
+    background: #18181b;
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+    border: 1px solid var(--border-highlight);
+    border-bottom: none;
+    padding: 20px 18px 28px 18px;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    max-height: 92vh;
+    overflow-y: auto;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.modal-header h3 {
+    font-size: 1.15rem;
+    color: #fff;
+    font-weight: 700;
+}
+
+.btn-close-modal {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Formulario dentro del modal */
+.type-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--input-bg);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 14px;
+    gap: 4px;
+}
+
+.type-btn {
+    border: none;
+    padding: 10px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.type-btn.active[data-type="gasto"] {
+    background: var(--red);
+    color: #fff;
+}
+
+.type-btn.active[data-type="ingreso"] {
+    background: var(--green);
+    color: #fff;
+}
+
+.label-calc-hint {
+    font-size: 0.68rem;
+    color: var(--primary);
+    float: right;
+    font-weight: normal;
+}
+
+.quick-amounts-bar {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.btn-quick-add {
+    flex: 1;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    padding: 5px 0;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-quick-add:active {
+    background: var(--primary);
+    color: #fff;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 12px;
+}
+
+.row-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.input-group label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.input-group input,
+.input-group select {
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-highlight);
+    color: #ffffff;
+    padding: 11px 12px;
+    border-radius: 10px;
+    font-size: 0.92rem;
+    outline: none;
+}
+
+.input-group input:focus,
+.input-group select:focus {
+    border-color: var(--primary);
+}
+
+/* Cuotas Crédito */
+.installments-box {
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    padding: 10px 12px;
+    border-radius: 12px;
+    margin-bottom: 12px;
+}
+
+.installments-box label {
+    font-size: 0.76rem;
+    color: var(--yellow);
+    font-weight: 600;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.installments-inputs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.installments-inputs select {
+    background: var(--input-bg);
+    border: 1px solid var(--border-highlight);
+    color: #fff;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    outline: none;
+}
+
+.cuota-preview {
+    font-size: 0.82rem;
+    color: var(--yellow);
+    font-weight: 600;
+}
+
+/* Foto Comprobante Ticket */
+.btn-file-upload {
+    background: var(--input-bg);
+    border: 1px dashed var(--border-highlight);
+    color: var(--text-muted);
+    padding: 11px 12px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    text-align: center;
+    cursor: pointer;
+    display: block;
+}
+
+.btn-file-upload:active {
+    background: #27272a;
+}
+
+.ticket-preview-box {
+    margin-bottom: 12px;
+    background: var(--input-bg);
+    padding: 8px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.ticket-preview-box img {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.btn-remove-ticket {
+    background: none;
+    border: none;
+    color: var(--red);
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.image-modal-sheet {
+    text-align: center;
+}
+
+.ticket-full-box img {
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: 12px;
+    object-fit: contain;
+}
+
+.btn-submit {
+    width: 100%;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: #ffffff;
+    border: none;
+    padding: 13px;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 6px;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+}
+
+.btn-submit:active {
+    transform: scale(0.98);
+}
+
+/* Listas y Ajustes */
+.subhead {
+    font-size: 0.88rem;
+    color: var(--text-white);
+    margin: 14px 0 8px 0;
+}
+
+.recurring-container,
+.categories-container,
+.backup-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.recurring-add-form,
+.category-add-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--input-bg);
+    padding: 12px;
+    border-radius: 12px;
+}
+
+.recurring-add-form input,
+.recurring-add-form select,
+.category-add-form input {
+    background: #18181b;
+    border: 1px solid var(--border-highlight);
+    color: #fff;
+    padding: 9px 10px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.category-add-form {
+    flex-direction: row;
+}
+
+.recurring-list,
+.categories-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.recurring-item,
+.category-item {
+    background: var(--input-bg);
+    padding: 9px 12px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+}
+
+.security-card {
+    background: var(--input-bg);
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border-highlight);
+}
+
+.security-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.setting-desc {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+}
+
+.btn-sm-secondary {
+    background: var(--subcard-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-white);
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.btn-secondary {
+    width: 100%;
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-highlight);
+    color: var(--text-white);
+    padding: 12px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    display: block;
+}
+
+.backup-divider {
+    border: 0;
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 0;
+}
+
+.btn-danger {
+    width: 100%;
+    background-color: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: var(--red);
+    padding: 12px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* Badge de Créditos del Creador (Edgar) */
+.creator-badge {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15));
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    padding: 12px 14px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+
+.creator-icon {
+    font-size: 1.6rem;
+}
+
+.creator-info strong {
+    font-size: 0.88rem;
+    color: #fff;
+    display: block;
+}
+
+.creator-info p {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+/* Footer discreto */
+.app-footer {
+    text-align: center;
+    padding: 10px 0 0 0;
+}
+
+.app-footer p {
+    font-size: 0.75rem;
+    color: #52525b;
+}
+
+.app-footer strong {
+    color: var(--primary);
+}

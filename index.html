@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#121214">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Edgar Finance">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <title>Edgar Finanzas PRO</title>
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Pantalla de Bloqueo por PIN (si está activado) -->
+    <div id="pin-lockscreen" class="pin-lockscreen" style="display:none;">
+        <div class="pin-box">
+            <span class="pin-icon">🔒</span>
+            <h2>Edgar Finanzas</h2>
+            <p>Ingresá tu PIN de seguridad</p>
+            <div class="pin-dots">
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+            </div>
+            <div class="pin-keypad">
+                <button type="button" class="pin-key" data-digit="1">1</button>
+                <button type="button" class="pin-key" data-digit="2">2</button>
+                <button type="button" class="pin-key" data-digit="3">3</button>
+                <button type="button" class="pin-key" data-digit="4">4</button>
+                <button type="button" class="pin-key" data-digit="5">5</button>
+                <button type="button" class="pin-key" data-digit="6">6</button>
+                <button type="button" class="pin-key" data-digit="7">7</button>
+                <button type="button" class="pin-key" data-digit="8">8</button>
+                <button type="button" class="pin-key" data-digit="9">9</button>
+                <button type="button" class="pin-key action" id="btn-pin-cancel">✕</button>
+                <button type="button" class="pin-key" data-digit="0">0</button>
+                <button type="button" class="pin-key action" id="btn-pin-del">⌫</button>
+            </div>
+            <p id="pin-error-msg" class="pin-error" style="display:none;">PIN incorrecto</p>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Barra Superior con menú y accesos directos -->
+        <header class="top-nav">
+            <div class="brand">
+                <span class="brand-icon">💎</span>
+                <div>
+                    <h1>Edgar Finanzas</h1>
+                    <span class="pro-tag">PRO</span>
+                </div>
+            </div>
+            <div class="nav-actions">
+                <button id="btn-export-csv" class="icon-btn" title="Descargar Excel / CSV">📊</button>
+                <button id="btn-recurring-open" class="icon-btn" title="Gastos Fijos / Suscripciones">🔁</button>
+                <button id="btn-backup" class="icon-btn" title="Ajustes y Respaldo">⚙️</button>
+            </div>
+        </header>
+
+        <!-- Selector de Período (Mes actual / Todo) -->
+        <section class="period-selector-card">
+            <button id="btn-prev-month" class="period-arrow" title="Mes anterior">‹</button>
+            <div class="period-info">
+                <span id="label-periodo" class="period-title">Cargando...</span>
+                <span id="label-subperiodo" class="period-subtitle">Mes en curso</span>
+            </div>
+            <button id="btn-next-month" class="period-arrow" title="Mes siguiente">›</button>
+        </section>
+
+        <!-- Tarjeta Principal de Balance -->
+        <section class="balance-card">
+            <span class="balance-label">Saldo Disponible del Mes</span>
+            <h2 id="balance-total">$0,00</h2>
+
+            <!-- Resumen de Ingresos y Gastos -->
+            <div class="summary-container">
+                <div class="summary-box ingreso">
+                    <span>▲ Ingresos</span>
+                    <p id="total-ingresos">+$0,00</p>
+                </div>
+                <div class="summary-box gasto">
+                    <span>▼ Gastos</span>
+                    <p id="total-gastos">-$0,00</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Barra de Progreso de Presupuesto Mensual -->
+        <section class="budget-card">
+            <div class="budget-header">
+                <div>
+                    <span class="budget-label">Presupuesto Mensual</span>
+                    <strong id="budget-progress-text">$0 / $0</strong>
+                </div>
+                <button id="btn-set-budget" class="btn-text">Definir Límite</button>
+            </div>
+            <div class="progress-bar-bg">
+                <div id="budget-bar" class="progress-bar-fill" style="width: 0%;"></div>
+            </div>
+            <p id="budget-msg" class="budget-hint">Sin límite configurado</p>
+        </section>
+
+        <!-- Banner / Aviso de Gastos Fijos Pendientes este mes -->
+        <div id="recurring-reminder-banner" class="recurring-reminder-banner" style="display:none;">
+            <div class="reminder-text">
+                <strong>🔁 Gastos Fijos del Mes</strong>
+                <span id="recurring-pending-count">Tenés suscripciones por registrar</span>
+            </div>
+            <button id="btn-apply-recurring" class="btn-sm-primary">Cargar</button>
+        </div>
+
+        <!-- Pestañas Principales (Movimientos, Estadísticas, Metas) -->
+        <div class="tab-switcher">
+            <button id="tab-btn-history" class="tab-btn active">📝 Movimientos</button>
+            <button id="tab-btn-charts" class="tab-btn">📊 Estadísticas</button>
+            <button id="tab-btn-goals" class="tab-btn">🎯 Metas</button>
+        </div>
+
+        <!-- Vista 1: Historial de Movimientos -->
+        <section id="view-history" class="view-panel active">
+            <!-- Barra de Búsqueda y Filtros Rápidos -->
+            <div class="search-filter-box">
+                <input type="text" id="busqueda-input" placeholder="🔍 Buscar por concepto..." autocomplete="off">
+                <div class="filter-row">
+                    <select id="filtro-categoria">
+                        <option value="Todas">Todas las categorías</option>
+                    </select>
+                    <select id="filtro-metodo">
+                        <option value="Todos">Todos los pagos</option>
+                        <option value="Efectivo">💵 Efectivo</option>
+                        <option value="Mercado Pago">📱 Mercado Pago</option>
+                        <option value="Débito">💳 Débito</option>
+                        <option value="Crédito">💳 Crédito</option>
+                        <option value="Transferencia">🏦 Transferencia</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Lista de Movimientos -->
+            <ul id="lista-movimientos" class="transaction-list">
+                <!-- Se llena dinámicamente con JS -->
+            </ul>
+        </section>
+
+        <!-- Vista 2: Gráficos y Estadísticas -->
+        <section id="view-charts" class="view-panel">
+            <div class="chart-card">
+                <h4>Gastos por Categoría</h4>
+                <div class="canvas-container">
+                    <canvas id="chart-categorias"></canvas>
+                </div>
+                <p id="chart-empty-msg" class="empty-chart-text" style="display:none;">No hay gastos registrados en este mes.</p>
+            </div>
+        </section>
+
+        <!-- Vista 3: Metas de Ahorro (Alcancías) -->
+        <section id="view-goals" class="view-panel">
+            <div class="goals-header">
+                <h3>Mis Metas de Ahorro 🐷</h3>
+                <button id="btn-new-goal" class="btn-sm-primary">+ Nueva Meta</button>
+            </div>
+            <div id="goals-list" class="goals-list">
+                <!-- Tarjetas de metas con progreso -->
+            </div>
+        </section>
+
+        <!-- Botón Flotante para Agregar (+) -->
+        <button id="btn-open-modal" class="fab-button" title="Nuevo Movimiento">
+            <span>+</span>
+        </button>
+
+        <!-- Modal Deslizable para Nuevo Movimiento -->
+        <div id="modal-backdrop" class="modal-backdrop">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3 id="modal-title">Nuevo Movimiento</h3>
+                    <button id="btn-close-modal" class="btn-close-modal">✕</button>
+                </div>
+
+                <form id="transaction-form">
+                    <input type="hidden" id="edit-id" value="">
+
+                    <!-- Switch Gasto / Ingreso -->
+                    <div class="type-switch">
+                        <button type="button" id="switch-gasto" class="type-btn active" data-type="gasto">▼ Gasto</button>
+                        <button type="button" id="switch-ingreso" class="type-btn" data-type="ingreso">▲ Ingreso</button>
+                    </div>
+
+                    <!-- Input Monto + Calculadora / Atajos Rápidos -->
+                    <div class="input-group">
+                        <label for="monto">Monto ($) <span class="label-calc-hint">Acepta cálculos ej: 1500+2300</span></label>
+                        <input type="text" id="monto" placeholder="0.00 o ej: 2500+1200" required autocomplete="off">
+                        <div class="quick-amounts-bar">
+                            <button type="button" class="btn-quick-add" data-add="500">+500</button>
+                            <button type="button" class="btn-quick-add" data-add="1000">+1.000</button>
+                            <button type="button" class="btn-quick-add" data-add="5000">+5.000</button>
+                            <button type="button" class="btn-quick-add" data-add="10000">+10.000</button>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="descripcion">Descripción</label>
+                        <input type="text" id="descripcion" placeholder="Ej: Supermercado, Nafta, Sueldo..." required>
+                    </div>
+
+                    <div class="row-inputs">
+                        <div class="input-group">
+                            <label for="categoria">Categoría</label>
+                            <select id="categoria" required></select>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="metodo">Método de Pago</label>
+                            <select id="metodo" required>
+                                <option value="Mercado Pago">📱 Mercado Pago</option>
+                                <option value="Efectivo">💵 Efectivo</option>
+                                <option value="Débito">💳 Débito</option>
+                                <option value="Crédito">💳 Crédito</option>
+                                <option value="Transferencia">🏦 Transferencia</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Fila condicional para compras en cuotas (Crédito) -->
+                    <div id="installments-row" class="installments-box" style="display:none;">
+                        <label for="cuotas-select">Comprar en Cuotas</label>
+                        <div class="installments-inputs">
+                            <select id="cuotas-select">
+                                <option value="1">1 cuota (Total)</option>
+                                <option value="2">2 cuotas</option>
+                                <option value="3">3 cuotas</option>
+                                <option value="6">6 cuotas</option>
+                                <option value="9">9 cuotas</option>
+                                <option value="12">12 cuotas</option>
+                                <option value="18">18 cuotas</option>
+                                <option value="24">24 cuotas</option>
+                            </select>
+                            <span id="cuota-estimada" class="cuota-preview"></span>
+                        </div>
+                    </div>
+
+                    <div class="row-inputs">
+                        <div class="input-group">
+                            <label for="fecha">Fecha</label>
+                            <input type="date" id="fecha" required>
+                        </div>
+
+                        <!-- Foto / Comprobante Ticket -->
+                        <div class="input-group">
+                            <label>Foto de Ticket / Factura</label>
+                            <label class="btn-file-upload">
+                                📸 <span id="label-ticket-status">Subir foto</span>
+                                <input type="file" id="ticket-input" accept="image/*" capture="environment" style="display:none;">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Preview de la foto si se cargó -->
+                    <div id="ticket-preview-box" class="ticket-preview-box" style="display:none;">
+                        <img id="ticket-preview-img" alt="Comprobante">
+                        <button type="button" id="btn-remove-ticket" class="btn-remove-ticket">✕ Quitar foto</button>
+                    </div>
+
+                    <button type="submit" id="btn-save-movement" class="btn-submit">Guardar Movimiento</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de Gastos Fijos / Recurrentes -->
+        <div id="recurring-modal" class="modal-backdrop">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3>🔁 Gastos Fijos y Suscripciones</h3>
+                    <button id="btn-close-recurring" class="btn-close-modal">✕</button>
+                </div>
+                <div class="recurring-container">
+                    <p class="backup-desc">Configurá gastos mensuales fijos (Alquiler, Spotify, Wifi) para cargarlos automáticamente cada mes.</p>
+                    
+                    <form id="recurring-form" class="recurring-add-form">
+                        <input type="text" id="rec-desc" placeholder="Nombre (ej: Spotify)" required>
+                        <input type="number" id="rec-monto" placeholder="Monto ($)" step="any" min="0.01" required>
+                        <select id="rec-cat" required></select>
+                        <select id="rec-metodo" required>
+                            <option value="Mercado Pago">📱 Mercado Pago</option>
+                            <option value="Débito">💳 Débito</option>
+                            <option value="Crédito">💳 Crédito</option>
+                            <option value="Efectivo">💵 Efectivo</option>
+                            <option value="Transferencia">🏦 Transferencia</option>
+                        </select>
+                        <button type="submit" class="btn-sm-primary">+ Agregar Gasto Fijo</button>
+                    </form>
+
+                    <h4 class="subhead">Lista de Gastos Fijos</h4>
+                    <ul id="recurring-list" class="recurring-list"></ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Categorías Personalizadas -->
+        <div id="categories-modal" class="modal-backdrop">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3>🏷️ Gestionar Categorías</h3>
+                    <button id="btn-close-categories" class="btn-close-modal">✕</button>
+                </div>
+                <div class="categories-container">
+                    <form id="category-form" class="category-add-form">
+                        <input type="text" id="cat-emoji" placeholder="Emoji (ej: 🐾)" maxlength="4" style="width: 70px; text-align:center;" required>
+                        <input type="text" id="cat-name" placeholder="Nombre (ej: Mascotas)" required>
+                        <button type="submit" class="btn-sm-primary">+ Crear</button>
+                    </form>
+                    <h4 class="subhead">Tus Categorías</h4>
+                    <ul id="categories-list" class="categories-list"></ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Nueva Meta de Ahorro -->
+        <div id="goal-modal" class="modal-backdrop">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3 id="goal-modal-title">🎯 Nueva Meta de Ahorro</h3>
+                    <button id="btn-close-goal" class="btn-close-modal">✕</button>
+                </div>
+                <form id="goal-form">
+                    <div class="input-group">
+                        <label for="goal-name">Nombre del objetivo</label>
+                        <input type="text" id="goal-name" placeholder="Ej: Vacaciones, Moto nueva..." required>
+                    </div>
+                    <div class="input-group">
+                        <label for="goal-target">Monto Objetivo ($)</label>
+                        <input type="number" id="goal-target" placeholder="Ej: 200000" step="any" min="1" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="goal-current">Monto Inicial Ahorrado ($)</label>
+                        <input type="number" id="goal-current" placeholder="0" step="any" min="0" value="0">
+                    </div>
+                    <button type="submit" class="btn-submit">Guardar Meta</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal para Aportar a una Meta -->
+        <div id="goal-deposit-modal" class="modal-backdrop">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3 id="deposit-goal-title">Aportar a Meta</h3>
+                    <button id="btn-close-deposit" class="btn-close-modal">✕</button>
+                </div>
+                <form id="goal-deposit-form">
+                    <input type="hidden" id="deposit-goal-id">
+                    <div class="input-group">
+                        <label for="deposit-amount">Monto a sumar ($)</label>
+                        <input type="number" id="deposit-amount" placeholder="0.00" step="any" min="1" required>
+                    </div>
+                    <button type="submit" class="btn-submit">Sumar a la Alcancía</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de Imagen en Grande del Ticket -->
+        <div id="ticket-modal" class="modal-backdrop">
+            <div class="modal-sheet image-modal-sheet">
+                <div class="modal-header">
+                    <h3>Comprobante / Ticket</h3>
+                    <button id="btn-close-ticket-viewer" class="btn-close-modal">✕</button>
+                </div>
+                <div class="ticket-full-box">
+                    <img id="ticket-full-img" alt="Comprobante en grande">
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Ajustes, Seguridad (PIN) y Respaldo -->
+        <div id="backup-modal" class="modal-backdrop">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3>⚙️ Ajustes y Seguridad</h3>
+                    <button id="btn-close-backup" class="btn-close-modal">✕</button>
+                </div>
+                <div class="backup-content">
+                    <!-- Seguridad por PIN -->
+                    <div class="security-card">
+                        <div class="security-header">
+                            <div>
+                                <strong>🔒 Bloqueo con PIN</strong>
+                                <p id="pin-status-text" class="setting-desc">Protegé tus finanzas al abrir la app</p>
+                            </div>
+                            <button id="btn-toggle-pin" class="btn-sm-secondary">Configurar PIN</button>
+                        </div>
+                    </div>
+
+                    <!-- Administrar Categorías -->
+                    <button id="btn-open-categories" class="btn-secondary">
+                        🏷️ Administrar Categorías Personalizadas
+                    </button>
+
+                    <hr class="backup-divider">
+
+                    <!-- Copias de Respaldo -->
+                    <button id="btn-download-backup" class="btn-secondary">
+                        📥 Descargar Copia de Respaldo (.json)
+                    </button>
+
+                    <label class="btn-secondary file-label">
+                        📤 Restaurar Copia (.json)
+                        <input type="file" id="file-restore" accept=".json" style="display:none;">
+                    </label>
+
+                    <hr class="backup-divider">
+
+                    <!-- Créditos del creador -->
+                    <div class="creator-badge">
+                        <span class="creator-icon">👨‍💻</span>
+                        <div class="creator-info">
+                            <strong>Desarrollado por Edgar</strong>
+                            <p>Versión 2.0 PRO • Aplicación Personal</p>
+                        </div>
+                    </div>
+
+                    <button id="btn-clear-all" class="btn-danger">
+                        🗑️ Borrar Todos los Datos
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pie de página discreto con autoría -->
+        <footer class="app-footer">
+            <p>Creado por <strong>Edgar</strong> • Finanzas Personales</p>
+        </footer>
+
+    </div>
+
+    <!-- Script principal de la aplicación -->
+    <script src="app.js"></script>
+</body>
+</html>
