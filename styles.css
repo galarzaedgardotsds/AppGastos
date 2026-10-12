@@ -262,12 +262,69 @@ body {
     text-align: center;
 }
 
+.balance-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
 .balance-label {
     font-size: 0.76rem;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.8px;
     font-weight: 500;
+}
+
+/* Switch Compacto para Saldo Acumulado */
+.toggle-switch-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-switch-label input {
+    display: none;
+}
+
+.toggle-switch-slider {
+    width: 32px;
+    height: 18px;
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-highlight);
+    border-radius: 20px;
+    position: relative;
+    transition: background-color 0.2s;
+}
+
+.toggle-switch-slider::before {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    left: 2px;
+    top: 2px;
+    background-color: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+
+.toggle-switch-label input:checked + .toggle-switch-slider {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.toggle-switch-label input:checked + .toggle-switch-slider::before {
+    transform: translateX(14px);
+}
+
+.toggle-switch-text {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 600;
 }
 
 .balance-card h2 {
@@ -588,10 +645,16 @@ body {
     color: var(--red);
 }
 
+.item-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-edit,
 .btn-delete {
     background: none;
     border: none;
-    color: #71717a;
     cursor: pointer;
     font-size: 0.95rem;
     padding: 6px;
@@ -599,6 +662,21 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.btn-edit {
+    color: var(--text-muted);
+}
+
+.btn-edit:hover,
+.btn-edit:active {
+    color: var(--primary);
+    background-color: rgba(99, 102, 241, 0.15);
+}
+
+.btn-delete {
+    color: #71717a;
 }
 
 .btn-delete:hover,
@@ -1437,4 +1515,117 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
+}
+
+.split-settlement-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-add-debt-from-split {
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid var(--primary);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+
+.btn-add-debt-from-split:active {
+    background: var(--primary);
+}
+
+/* Gráfico de barras de evolución */
+.canvas-bar-container {
+    max-height: 240px;
+}
+
+/* Medidor de Almacenamiento Local */
+.storage-card {
+    background: var(--input-bg);
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border-highlight);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.storage-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-white);
+}
+
+.storage-header strong {
+    color: var(--primary);
+    font-size: 0.82rem;
+}
+
+/* Sistema de Notificaciones Toast */
+.toast-container {
+    position: fixed;
+    top: calc(20px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 380px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast {
+    background: #18181b;
+    border: 1px solid var(--border-highlight);
+    color: #fff;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: auto;
+    border-left: 4px solid var(--primary);
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.toast.success {
+    border-left-color: var(--green);
+}
+
+.toast.error {
+    border-left-color: var(--red);
+}
+
+.toast.warning {
+    border-left-color: var(--yellow);
+}
+
+.toast-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.toast-msg {
+    flex: 1;
+    line-height: 1.3;
 }

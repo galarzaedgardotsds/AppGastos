@@ -13,7 +13,7 @@
     <title>Edgar Finanzas PRO</title>
     <!-- Chart.js para gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 
@@ -76,7 +76,14 @@
 
         <!-- Tarjeta Principal de Balance -->
         <section class="balance-card">
-            <span class="balance-label">Saldo Disponible del Mes</span>
+            <div class="balance-header-row">
+                <span id="label-balance-title" class="balance-label">Saldo Disponible del Mes</span>
+                <label class="toggle-switch-label" title="Alternar entre saldo neto del mes o acumulado histórico">
+                    <input type="checkbox" id="switch-saldo-acumulado">
+                    <span class="toggle-switch-slider"></span>
+                    <span class="toggle-switch-text">Acumulado</span>
+                </label>
+            </div>
             <h2 id="balance-total">$0,00</h2>
 
             <!-- Resumen de Ingresos y Gastos -->
@@ -158,6 +165,14 @@
                     <canvas id="chart-categorias"></canvas>
                 </div>
                 <p id="chart-empty-msg" class="empty-chart-text" style="display:none;">No hay gastos registrados en este mes.</p>
+            </div>
+
+            <div class="chart-card">
+                <h4>Evolución: Ingresos vs. Gastos (Últimos 6 meses)</h4>
+                <div class="canvas-container canvas-bar-container">
+                    <canvas id="chart-evolucion"></canvas>
+                </div>
+                <p id="chart-evolucion-empty-msg" class="empty-chart-text" style="display:none;">No hay suficientes movimientos para mostrar la evolución.</p>
             </div>
         </section>
 
@@ -537,12 +552,24 @@
 
                     <hr class="backup-divider">
 
+                    <!-- Indicador visual de almacenamiento local -->
+                    <div class="storage-card">
+                        <div class="storage-header">
+                            <span>💾 Almacenamiento Local (localStorage)</span>
+                            <strong id="storage-percent-text">0% usado</strong>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div id="storage-progress-bar" class="progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                        <p id="storage-detail-text" class="setting-desc">0 KB / 5 MB aprox.</p>
+                    </div>
+
                     <!-- Información de Versión y Acerca de -->
                     <div class="creator-badge" id="btn-open-about" style="cursor:pointer;" title="Ver información de versión">
                         <span class="creator-icon">💎</span>
                         <div class="creator-info">
                             <strong>Edgar Finanzas PRO</strong>
-                            <p id="app-version-badge">Versión 5.0 (Build Oct 2026) • Tocar para detalles</p>
+                            <p id="app-version-badge">Versión 6.0 (Build Oct 2026) • Tocar para detalles</p>
                         </div>
                     </div>
 
@@ -568,24 +595,27 @@
                     <div style="font-size:3rem;">💎</div>
                     <div>
                         <h2 style="font-size:1.3rem; color:#fff;">Edgar Finanzas PRO</h2>
-                        <span class="pro-tag" style="font-size:0.75rem; padding:3px 8px;">v5.0 OFICIAL</span>
+                        <span class="pro-tag" style="font-size:0.75rem; padding:3px 8px;">v6.0 OFICIAL</span>
                     </div>
 
                     <div style="background:var(--input-bg); border:1px solid var(--border-highlight); border-radius:14px; padding:14px; text-align:left; font-size:0.85rem; line-height:1.6; color:#d4d4d8;">
                         <p><strong>Desarrollado por:</strong> Edgar</p>
-                        <p><strong>Versión instalada:</strong> <span id="about-version-text" style="color:var(--green); font-weight:700;">v5.0</span></p>
-                        <p><strong>Diseño Móvil:</strong> Motorola Edge Full-Width Fix</p>
-                        <p><strong>Modo:</strong> PWA Offline Standalone</p>
+                        <p><strong>Versión instalada:</strong> <span id="about-version-text" style="color:var(--green); font-weight:700;">v6.0</span></p>
+                        <p><strong>Diseño Móvil:</strong> Motorola Edge & iPhone 13/Pro Safe-Area</p>
+                        <p><strong>Modo:</strong> PWA Offline Standalone Maskable</p>
                         <p><strong>Último despliegue:</strong> 12 de Octubre de 2026</p>
                     </div>
 
                     <div style="text-align:left; font-size:0.8rem; color:var(--text-muted);">
-                        <strong style="color:#fff; display:block; margin-bottom:4px;">Novedades de esta versión:</strong>
+                        <strong style="color:#fff; display:block; margin-bottom:4px;">Novedades de la versión 6.0:</strong>
                         <ul style="padding-left:18px; display:flex; flex-direction:column; gap:4px;">
-                            <li>Botón "+ Agregar a la Salida" centrado y adaptable a cualquier celular.</li>
-                            <li>División grupal estilo Splitwise con copia para WhatsApp.</li>
-                            <li>Control de deudas de amigos ("Me Deben") y cobros automáticos.</li>
-                            <li>Estrategia Network-First para actualización inmediata de cambios.</li>
+                            <li>Edición completa de movimientos con precarga de datos y fotos.</li>
+                            <li>Gestión inteligente de cuotas agrupadas con borrado selectivo.</li>
+                            <li>Gráfico de evolución comparativa de Ingresos vs. Gastos (6 meses).</li>
+                            <li>Switch para ver saldo del mes aislado o acumulado histórico.</li>
+                            <li>Anotar deuda directa desde el reparto de salidas grupales.</li>
+                            <li>Notificaciones Toasts modernas y sanitización XSS.</li>
+                            <li>Medidor de almacenamiento local en tiempo real.</li>
                         </ul>
                     </div>
 
@@ -598,12 +628,15 @@
 
         <!-- Pie de página discreto con autoría -->
         <footer class="app-footer">
-            <p>Creado por <strong>Edgar</strong> • Finanzas Personales <span style="opacity:0.6;">(v5.0)</span></p>
+            <p>Creado por <strong>Edgar</strong> • Finanzas Personales <span style="opacity:0.6;">(v6.0)</span></p>
         </footer>
+
+        <!-- Contenedor de Notificaciones Toast -->
+        <div id="toast-container" class="toast-container"></div>
 
     </div>
 
     <!-- Script principal de la aplicación -->
-    <script src="app.js?v=5"></script>
+    <script src="app.js?v=6"></script>
 </body>
 </html>

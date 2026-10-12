@@ -4,13 +4,61 @@
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('Service Worker activo'))
+            .then(reg => console.log('Service Worker v6 activo'))
             .catch(err => console.log('SW error:', err));
     });
 }
 
 // ==========================================
-// 2. ESTADO GLOBAL Y PERSISTENCIA
+// 2. UTILIDADES DE SEGURIDAD Y UI (TOASTS & XSS)
+// ==========================================
+// Sanitización para prevenir inyección HTML / XSS
+function escaparHTML(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// Componente elegante de Notificaciones Toast
+function mostrarToast(mensaje, tipo = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${tipo}`;
+
+    let icon = '✓';
+    if (tipo === 'error') icon = '✕';
+    else if (tipo === 'warning') icon = '⚠️';
+    else if (tipo === 'info') icon = 'ℹ️';
+
+    toast.innerHTML = `
+        <span class="toast-icon">${icon}</span>
+        <span class="toast-msg">${escaparHTML(mensaje)}</span>
+    `;
+
+    container.appendChild(toast);
+
+    // Animación de entrada
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
+
+    // Auto-eliminar a los 3 segundos
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 300);
+    }, 3000);
+}
+
+// ==========================================
+// 3. ESTADO GLOBAL Y PERSISTENCIA SEGURA
 // ==========================================
 let movimientos = JSON.parse(localStorage.getItem('mis_movimientos')) || [];
 let presupuestos = JSON.parse(localStorage.getItem('mis_presupuestos')) || {}; // { 'YYYY-MM': monto }
@@ -20,6 +68,7 @@ let splitParticipantes = JSON.parse(localStorage.getItem('split_participantes'))
 let gastosFijos = JSON.parse(localStorage.getItem('mis_gastos_fijos')) || []; // [{ id, desc, monto, cat, metodo }]
 let gastosFijosCargados = JSON.parse(localStorage.getItem('fijos_cargados_meses')) || {}; // { 'YYYY-MM': true }
 let userPin = localStorage.getItem('app_pin') || null;
+let usarSaldoAcumulado = JSON.parse(localStorage.getItem('usar_saldo_acumulado')) || false;
 
 // Categorías por defecto editables
 let categorias = JSON.parse(localStorage.getItem('mis_categorias')) || [
@@ -42,14 +91,51 @@ const iconosMetodo = {
 };
 
 function guardarEnMemoria() {
-    localStorage.setItem('mis_movimientos', JSON.stringify(movimientos));
-    localStorage.setItem('mis_presupuestos', JSON.stringify(presupuestos));
-    localStorage.setItem('mis_metas', JSON.stringify(metasAhorro));
-    localStorage.setItem('mis_deudas_amigos', JSON.stringify(deudasAmigos));
-    localStorage.setItem('split_participantes', JSON.stringify(splitParticipantes));
-    localStorage.setItem('mis_gastos_fijos', JSON.stringify(gastosFijos));
-    localStorage.setItem('fijos_cargados_meses', JSON.stringify(gastosFijosCargados));
-    localStorage.setItem('mis_categorias', JSON.stringify(categorias));
+    try {
+        localStorage.setItem('mis_movimientos', JSON.stringify(movimientos));
+        localStorage.setItem('mis_presupuestos', JSON.stringify(presupuestos));
+        localStorage.setItem('mis_metas', JSON.stringify(metasAhorro));
+        localStorage.setItem('mis_deudas_amigos', JSON.stringify(deudasAmigos));
+        localStorage.setItem('split_participantes', JSON.stringify(splitParticipantes));
+        localStorage.setItem('mis_gastos_fijos', JSON.stringify(gastosFijos));
+        localStorage.setItem('fijos_cargados_meses', JSON.stringify(gastosFijosCargados));
+        localStorage.setItem('mis_categorias', JSON.stringify(categorias));
+        localStorage.setItem('usar_saldo_acumulado', JSON.stringify(usarSaldoAcumulado));
+        actualizarIndicadorAlmacenamiento();
+    } catch (e) {
+        console.error('Error al guardar en memoria:', e);
+        mostrarToast('¡Límite de memoria alcanzado! Intenta borrar fotos viejas.', 'error');
+    }
+}
+
+// Medidor visual de almacenamiento local (5MB aprox de límite)
+function actualizarIndicadorAlmacenamiento() {
+    const storagePercentText = document.getElementById('storage-percent-text');
+    const storageProgressBar = document.getElementById('storage-progress-bar');
+    const storageDetailText = document.getElementById('storage-detail-text');
+    if (!storagePercentText || !storageProgressBar || !storageDetailText) return;
+
+    try {
+        let totalBytes = 0;
+        for (let x in localStorage) {
+            if (localStorage.hasOwnProperty(x)) {
+                totalBytes += (localStorage[x].length + x.length) * 2;
+            }
+        }
+        const totalKB = (totalBytes / 1024).toFixed(1);
+        const maxBytes = 5 * 1024 * 1024; // 5 MB estándar
+        const porcentaje = Math.min(100, Math.round((totalBytes / maxBytes) * 100));
+
+        storagePercentText.textContent = `${porcentaje}% usado`;
+        storageProgressBar.style.width = `${porcentaje}%`;
+        storageProgressBar.className = 'progress-bar-fill';
+        if (porcentaje >= 90) storageProgressBar.classList.add('danger');
+        else if (porcentaje >= 70) storageProgressBar.classList.add('warning');
+
+        storageDetailText.textContent = `${totalKB} KB de 5 MB aprox. utilizados`;
+    } catch (err) {
+        storageDetailText.textContent = 'Espacio de almacenamiento disponible';
+    }
 }
 
 function formatearDinero(cantidad) {
@@ -78,7 +164,7 @@ const nombresMeses = [
 ];
 
 // ==========================================
-// 3. SEGURIDAD: PANTALLA DE BLOQUEO POR PIN
+// 4. SEGURIDAD: PANTALLA DE BLOQUEO POR PIN
 // ==========================================
 const pinLockscreen = document.getElementById('pin-lockscreen');
 const pinDots = document.querySelectorAll('.pin-dot');
@@ -153,7 +239,7 @@ btnTogglePin.addEventListener('click', () => {
         if (opcion) {
             userPin = null;
             localStorage.removeItem('app_pin');
-            alert('PIN desactivado.');
+            mostrarToast('PIN desactivado con éxito.', 'info');
             checkPinLock();
             return;
         }
@@ -163,21 +249,23 @@ btnTogglePin.addEventListener('click', () => {
         if (/^\d{4}$/.test(nuevo.trim())) {
             userPin = nuevo.trim();
             localStorage.setItem('app_pin', userPin);
-            alert('¡PIN configurado correctamente!');
+            mostrarToast('¡PIN configurado correctamente!', 'success');
             checkPinLock();
         } else {
-            alert('El PIN debe tener exactamente 4 números.');
+            mostrarToast('El PIN debe tener exactamente 4 números.', 'error');
         }
     }
 });
 
 // ==========================================
-// 4. ELEMENTOS DEL DOM
+// 5. REFERENCIAS A ELEMENTOS DEL DOM
 // ==========================================
 // Balance
 const balanceTotalEl = document.getElementById('balance-total');
 const totalIngresosEl = document.getElementById('total-ingresos');
 const totalGastosEl = document.getElementById('total-gastos');
+const labelBalanceTitle = document.getElementById('label-balance-title');
+const switchSaldoAcumulado = document.getElementById('switch-saldo-acumulado');
 
 // Períodos
 const labelPeriodo = document.getElementById('label-periodo');
@@ -251,11 +339,13 @@ const filtroCategoria = document.getElementById('filtro-categoria');
 const filtroMetodo = document.getElementById('filtro-metodo');
 const listaMovimientos = document.getElementById('lista-movimientos');
 
-// Modal Movimiento
+// Modal Movimiento (Alta y Edición)
 const modalBackdrop = document.getElementById('modal-backdrop');
 const btnOpenModal = document.getElementById('btn-open-modal');
 const btnCloseModal = document.getElementById('btn-close-modal');
 const form = document.getElementById('transaction-form');
+const modalTitle = document.getElementById('modal-title');
+const editIdInput = document.getElementById('edit-id');
 const switchGasto = document.getElementById('switch-gasto');
 const switchIngreso = document.getElementById('switch-ingreso');
 const montoInput = document.getElementById('monto');
@@ -271,6 +361,7 @@ const labelTicketStatus = document.getElementById('label-ticket-status');
 const ticketPreviewBox = document.getElementById('ticket-preview-box');
 const ticketPreviewImg = document.getElementById('ticket-preview-img');
 const btnRemoveTicket = document.getElementById('btn-remove-ticket');
+const btnSaveMovement = document.getElementById('btn-save-movement');
 
 // Modal Ticket Viewer
 const ticketModal = document.getElementById('ticket-modal');
@@ -327,17 +418,17 @@ const btnClearAll = document.getElementById('btn-clear-all');
 // Gráficos
 const chartCanvas = document.getElementById('chart-categorias');
 const chartEmptyMsg = document.getElementById('chart-empty-msg');
+const chartEvolucionCanvas = document.getElementById('chart-evolucion');
+const chartEvolucionEmptyMsg = document.getElementById('chart-evolucion-empty-msg');
 let chartInstance = null;
+let chartEvolucionInstance = null;
 
 // ==========================================
-// 5. POBLAR SELECTORES DE CATEGORÍAS
+// 6. POBLAR SELECTORES DE CATEGORÍAS
 // ==========================================
 function actualizarSelectoresCategorias() {
-    // 1. Selector en formulario de movimiento
     categoriaInput.innerHTML = '';
-    // 2. Selector en filtro
     filtroCategoria.innerHTML = '<option value="Todas">Todas las categorías</option>';
-    // 3. Selector en gastos recurrentes
     recCatSelect.innerHTML = '';
 
     categorias.forEach(cat => {
@@ -366,7 +457,7 @@ function renderCategoriasList() {
         const li = document.createElement('li');
         li.className = 'category-item';
         li.innerHTML = `
-            <span>${cat.emoji} <strong>${cat.nombre}</strong></span>
+            <span>${cat.emoji} <strong>${escaparHTML(cat.nombre)}</strong></span>
             <button class="btn-delete" onclick="eliminarCategoria('${cat.id}')">✕</button>
         `;
         categoriesList.appendChild(li);
@@ -384,11 +475,12 @@ categoryForm.addEventListener('submit', (e) => {
     guardarEnMemoria();
     actualizarSelectoresCategorias();
     categoryForm.reset();
+    mostrarToast('Categoría creada exitosamente.');
 });
 
 function eliminarCategoria(catId) {
     if (categorias.length <= 1) {
-        alert('Tenés que mantener al menos una categoría.');
+        mostrarToast('Tenés que mantener al menos una categoría.', 'warning');
         return;
     }
     if (confirm('¿Eliminar esta categoría?')) {
@@ -396,19 +488,17 @@ function eliminarCategoria(catId) {
         guardarEnMemoria();
         actualizarSelectoresCategorias();
         actualizarPantalla();
+        mostrarToast('Categoría eliminada.', 'info');
     }
 }
 
 // ==========================================
-// 6. CALCULADORA RÁPIDA EN EL MONTO
+// 7. CALCULADORA RÁPIDA EN EL MONTO
 // ==========================================
-// Evalúa operaciones seguras como "1500 + 400 - 50"
 function evaluarMontoMatematico(str) {
     if (!str) return NaN;
-    // Solo permitir números, +, -, *, /, . y comas
-    const limpio = str.replace(/,/g, '.').replace(/[^0-9+\-*/.]/g, '');
+    const limpio = String(str).replace(/,/g, '.').replace(/[^0-9+\-*/.]/g, '');
     try {
-        // Usar Function segura para evaluar operación aritmética simple
         const res = new Function(`return (${limpio})`)();
         return typeof res === 'number' && !isNaN(res) ? Math.round(res * 100) / 100 : NaN;
     } catch {
@@ -416,7 +506,6 @@ function evaluarMontoMatematico(str) {
     }
 }
 
-// Botones de suma rápida (+500, +1000, etc.)
 document.querySelectorAll('.btn-quick-add').forEach(btn => {
     btn.addEventListener('click', () => {
         const valorSumar = parseFloat(btn.dataset.add);
@@ -429,10 +518,10 @@ document.querySelectorAll('.btn-quick-add').forEach(btn => {
 montoInput.addEventListener('input', actualizarPreviewCuotas);
 
 // ==========================================
-// 7. COMPRAS EN CUOTAS CON TARJETA DE CRÉDITO
+// 8. COMPRAS EN CUOTAS CON TARJETA DE CRÉDITO
 // ==========================================
 metodoInput.addEventListener('change', () => {
-    if (metodoInput.value === 'Crédito' && selectedType === 'gasto') {
+    if (metodoInput.value === 'Crédito' && selectedType === 'gasto' && !editIdInput.value) {
         installmentsRow.style.display = 'block';
     } else {
         installmentsRow.style.display = 'none';
@@ -456,7 +545,7 @@ function actualizarPreviewCuotas() {
 }
 
 // ==========================================
-// 8. FOTO / COMPROBANTE DE TICKET (CÁMARA/GALERÍA)
+// 9. FOTO / COMPROBANTE DE TICKET (CÁMARA/GALERÍA)
 // ==========================================
 ticketInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -464,18 +553,17 @@ ticketInput.addEventListener('change', (e) => {
 
     const reader = new FileReader();
     reader.onload = function(event) {
-        // Comprimir imagen usando un canvas liviano para optimizar memoria
         const img = new Image();
         img.onload = function() {
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 800;
+            const MAX_WIDTH = 700; // Optimización de tamaño para localStorage
             const scaleSize = MAX_WIDTH / img.width;
             canvas.width = (img.width > MAX_WIDTH) ? MAX_WIDTH : img.width;
             canvas.height = (img.width > MAX_WIDTH) ? (img.height * scaleSize) : img.height;
 
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            currentTicketBase64 = canvas.toDataURL('image/jpeg', 0.7);
+            currentTicketBase64 = canvas.toDataURL('image/jpeg', 0.65);
 
             ticketPreviewImg.src = currentTicketBase64;
             ticketPreviewBox.style.display = 'flex';
@@ -503,7 +591,7 @@ btnCloseTicketViewer.addEventListener('click', () => {
 });
 
 // ==========================================
-// 9. GASTOS FIJOS / RECURRENTES
+// 10. GASTOS FIJOS / RECURRENTES
 // ==========================================
 btnRecurringOpen.addEventListener('click', () => {
     renderGastosFijos();
@@ -532,6 +620,7 @@ recurringForm.addEventListener('submit', (e) => {
     renderGastosFijos();
     verificarGastosFijosDelMes();
     recurringForm.reset();
+    mostrarToast('Gasto fijo agregado.');
 });
 
 function renderGastosFijos() {
@@ -547,8 +636,8 @@ function renderGastosFijos() {
         li.className = 'recurring-item';
         li.innerHTML = `
             <div>
-                <strong>${catEmoji} ${item.desc}</strong>
-                <span style="color:#a1a1aa; font-size:0.75rem; display:block;">${item.metodo}</span>
+                <strong>${catEmoji} ${escaparHTML(item.desc)}</strong>
+                <span style="color:#a1a1aa; font-size:0.75rem; display:block;">${escaparHTML(item.metodo)}</span>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
                 <span style="color:#ef4444; font-weight:700;">-${formatearDinero(item.monto)}</span>
@@ -564,6 +653,7 @@ function eliminarGastoFijo(id) {
     guardarEnMemoria();
     renderGastosFijos();
     verificarGastosFijosDelMes();
+    mostrarToast('Gasto fijo eliminado.', 'info');
 }
 
 function verificarGastosFijosDelMes() {
@@ -601,12 +691,12 @@ btnApplyRecurring.addEventListener('click', () => {
         gastosFijosCargados[periodKey] = true;
         guardarEnMemoria();
         actualizarPantalla();
-        alert('¡Gastos fijos aplicados exitosamente!');
+        mostrarToast('¡Gastos fijos aplicados exitosamente!', 'success');
     }
 });
 
 // ==========================================
-// 10. METAS DE AHORRO (CHANCITO VIRTUAL)
+// 11. METAS DE AHORRO (CHANCITO VIRTUAL)
 // ==========================================
 btnNewGoal.addEventListener('click', () => {
     goalForm.reset();
@@ -635,6 +725,7 @@ goalForm.addEventListener('submit', (e) => {
     guardarEnMemoria();
     goalModal.classList.remove('open');
     renderMetas();
+    mostrarToast('Meta de ahorro creada con éxito.');
 });
 
 function renderMetas() {
@@ -650,7 +741,7 @@ function renderMetas() {
         div.className = 'goal-card';
         div.innerHTML = `
             <div class="goal-card-top">
-                <strong>🐷 ${meta.nombre}</strong>
+                <strong>🐷 ${escaparHTML(meta.nombre)}</strong>
                 <button class="btn-delete" onclick="eliminarMeta(${meta.id})">✕</button>
             </div>
             <div class="goal-amounts">
@@ -662,7 +753,7 @@ function renderMetas() {
             <div class="goal-card-actions">
                 <span class="goal-percent">${porc}% completado</span>
                 <div class="goal-btns">
-                    <button class="btn-sm-primary" onclick="abrirAporteMeta(${meta.id}, '${meta.nombre}')">+ Sumar Ahorro</button>
+                    <button class="btn-sm-primary" onclick="abrirAporteMeta(${meta.id}, '${escaparHTML(meta.nombre)}')">+ Sumar Ahorro</button>
                 </div>
             </div>
         `;
@@ -695,6 +786,7 @@ goalDepositForm.addEventListener('submit', (e) => {
         guardarEnMemoria();
         renderMetas();
         goalDepositModal.classList.remove('open');
+        mostrarToast(`¡Sumaste ${formatearDinero(monto)} a tu meta! 🐷`, 'success');
     }
 });
 
@@ -703,11 +795,12 @@ function eliminarMeta(id) {
         metasAhorro = metasAhorro.filter(m => m.id !== id);
         guardarEnMemoria();
         renderMetas();
+        mostrarToast('Meta eliminada.', 'info');
     }
 }
 
 // ==========================================
-// 11. ACTUALIZAR PANTALLA PRINCIPAL
+// 12. ACTUALIZAR PANTALLA PRINCIPAL Y SALDO
 // ==========================================
 function actualizarHeaderPeriodo() {
     labelPeriodo.textContent = `${nombresMeses[currentMonth]} ${currentYear}`;
@@ -737,6 +830,17 @@ btnNextMonth.addEventListener('click', () => {
     actualizarPantalla();
 });
 
+// Control del switch de Saldo Acumulado
+if (switchSaldoAcumulado) {
+    switchSaldoAcumulado.checked = usarSaldoAcumulado;
+    switchSaldoAcumulado.addEventListener('change', () => {
+        usarSaldoAcumulado = switchSaldoAcumulado.checked;
+        guardarEnMemoria();
+        actualizarPantalla();
+        mostrarToast(usarSaldoAcumulado ? 'Modo Saldo Acumulado activado.' : 'Modo Balance Neto del Mes activado.', 'info');
+    });
+}
+
 function actualizarPantalla() {
     actualizarHeaderPeriodo();
     verificarGastosFijosDelMes();
@@ -746,7 +850,7 @@ function actualizarPantalla() {
     const catFiltro = filtroCategoria.value;
     const metodoFiltro = filtroMetodo.value;
 
-    // Filtrar movimientos del mes en curso
+    // Movimientos específicos de este mes
     const movimientosDelMes = movimientos.filter(mov => {
         if (!mov.fecha) return true;
         return mov.fecha.startsWith(periodKey);
@@ -764,13 +868,31 @@ function actualizarPantalla() {
     });
 
     const balanceMes = sumaIngresos - sumaGastos;
-    balanceTotalEl.textContent = formatearDinero(balanceMes);
+
+    // Cálculo con o sin saldo acumulado anterior
+    if (usarSaldoAcumulado) {
+        labelBalanceTitle.textContent = 'Saldo Total Acumulado';
+        let saldoHistoricoTotal = 0;
+        // Se calcula hasta el final del mes seleccionado
+        movimientos.forEach(mov => {
+            const fechaMov = mov.fecha || '0000-00-00';
+            if (fechaMov.substring(0, 7) <= periodKey) {
+                if (mov.tipo === 'ingreso') saldoHistoricoTotal += mov.monto;
+                else saldoHistoricoTotal -= mov.monto;
+            }
+        });
+        balanceTotalEl.textContent = formatearDinero(saldoHistoricoTotal);
+    } else {
+        labelBalanceTitle.textContent = 'Saldo Disponible del Mes';
+        balanceTotalEl.textContent = formatearDinero(balanceMes);
+    }
+
     totalIngresosEl.textContent = '+' + formatearDinero(sumaIngresos);
     totalGastosEl.textContent = '-' + formatearDinero(sumaGastos);
 
     actualizarWidgetPresupuesto(sumaGastos, periodKey);
 
-    // Filtrar lista
+    // Filtrar lista para renderizar
     const movimientosFiltrados = movimientosDelMes.filter(mov => {
         const coincideCat = (catFiltro === 'Todas' || mov.categoria === catFiltro);
         const coincideMetodo = (metodoFiltro === 'Todos' || mov.metodo === metodoFiltro);
@@ -778,7 +900,7 @@ function actualizarPantalla() {
         return coincideCat && coincideMetodo && coincideBusqueda;
     });
 
-    // Renderizar
+    // Renderizar Lista con botón editar y sanitización
     listaMovimientos.innerHTML = '';
     if (movimientosFiltrados.length === 0) {
         listaMovimientos.innerHTML = `<li style="text-align:center; color:#71717a; padding: 28px 0; font-size: 0.9rem;">No hay movimientos para este período.</li>`;
@@ -794,22 +916,20 @@ function actualizarPantalla() {
             const metodoTexto = mov.metodo ? `${metodoIcon} ${mov.metodo}` : '';
             const fechaCorta = mov.fecha ? `${mov.fecha.split('-')[2]}/${mov.fecha.split('-')[1]}` : '';
 
-            // Badge cuotas si aplica
             const cuotasHtml = (mov.cuotasTotales && mov.cuotasTotales > 1) 
                 ? `<span class="badge-cuota">Cuota ${mov.cuotaActual}/${mov.cuotasTotales}</span>` 
                 : '';
 
-            // Botón ticket si tiene foto adjunta
             const ticketBtn = mov.ticket
                 ? `<button class="badge-ticket-btn" onclick="verTicketEnGrande('${mov.ticket}')" title="Ver foto ticket">📸 Ticket</button>`
                 : '';
 
             li.innerHTML = `
                 <div class="item-info">
-                    <strong>${mov.descripcion}</strong>
+                    <strong>${escaparHTML(mov.descripcion)}</strong>
                     <div class="item-badges">
                         <span class="badge">${catLabel}</span>
-                        ${metodoTexto ? `<span class="badge">${metodoTexto}</span>` : ''}
+                        ${metodoTexto ? `<span class="badge">${escaparHTML(metodoTexto)}</span>` : ''}
                         ${cuotasHtml}
                         ${ticketBtn}
                         ${fechaCorta ? `<span class="badge-date">📅 ${fechaCorta}</span>` : ''}
@@ -817,7 +937,10 @@ function actualizarPantalla() {
                 </div>
                 <div class="item-amount">
                     <span>${signo}${formatearDinero(mov.monto)}</span>
-                    <button class="btn-delete" onclick="eliminarMovimiento(${mov.id})" title="Eliminar">✕</button>
+                    <div class="item-actions">
+                        <button class="btn-edit" onclick="editarMovimiento(${mov.id})" title="Editar movimiento">✏️</button>
+                        <button class="btn-delete" onclick="eliminarMovimiento(${mov.id})" title="Eliminar">✕</button>
+                    </div>
                 </div>
             `;
             listaMovimientos.appendChild(li);
@@ -825,9 +948,11 @@ function actualizarPantalla() {
     }
 
     actualizarGrafico(movimientosDelMes);
+    actualizarGraficoEvolucion();
+    actualizarIndicadorAlmacenamiento();
 }
 
-// Presupuesto
+// Widget Presupuesto
 function actualizarWidgetPresupuesto(totalGastosMes, periodKey) {
     const limite = presupuestos[periodKey] || 0;
 
@@ -867,15 +992,19 @@ btnSetBudget.addEventListener('click', () => {
         const val = parseFloat(nuevo);
         if (!isNaN(val) && val > 0) {
             presupuestos[periodKey] = val;
+            mostrarToast('Presupuesto fijado.');
         } else if (nuevo.trim() === '' || val === 0) {
             delete presupuestos[periodKey];
+            mostrarToast('Presupuesto eliminado.', 'info');
         }
         guardarEnMemoria();
         actualizarPantalla();
     }
 });
 
-// Gráficos
+// ==========================================
+// 13. GRÁFICOS (DONUT Y EVOLUCIÓN COMPARATIVA)
+// ==========================================
 function actualizarGrafico(movimientosMes) {
     if (typeof Chart === 'undefined') return;
 
@@ -945,15 +1074,119 @@ function actualizarGrafico(movimientosMes) {
     });
 }
 
+// Gráfico de barras: Evolución de los últimos 6 meses
+function actualizarGraficoEvolucion() {
+    if (typeof Chart === 'undefined' || !chartEvolucionCanvas) return;
+
+    // Calcular los últimos 6 meses finalizando en el mes actual seleccionado
+    const mesesKeys = [];
+    const mesesLabels = [];
+
+    for (let i = 5; i >= 0; i--) {
+        const d = new Date(currentYear, currentMonth - i, 1);
+        const y = d.getFullYear();
+        const m = d.getMonth() + 1;
+        const key = `${y}-${String(m).padStart(2, '0')}`;
+        mesesKeys.push(key);
+        mesesLabels.push(`${nombresMeses[d.getMonth()].substring(0, 3)} ${String(y).slice(-2)}`);
+    }
+
+    const ingresosData = [0, 0, 0, 0, 0, 0];
+    const gastosData = [0, 0, 0, 0, 0, 0];
+    let hayDatos = false;
+
+    movimientos.forEach(mov => {
+        if (!mov.fecha) return;
+        const mesKey = mov.fecha.substring(0, 7);
+        const idx = mesesKeys.indexOf(mesKey);
+        if (idx !== -1) {
+            hayDatos = true;
+            if (mov.tipo === 'ingreso') {
+                ingresosData[idx] += mov.monto;
+            } else {
+                gastosData[idx] += mov.monto;
+            }
+        }
+    });
+
+    if (!hayDatos) {
+        if (chartEvolucionInstance) chartEvolucionInstance.destroy();
+        chartEvolucionCanvas.style.display = 'none';
+        if (chartEvolucionEmptyMsg) chartEvolucionEmptyMsg.style.display = 'block';
+        return;
+    }
+
+    chartEvolucionCanvas.style.display = 'block';
+    if (chartEvolucionEmptyMsg) chartEvolucionEmptyMsg.style.display = 'none';
+
+    if (chartEvolucionInstance) chartEvolucionInstance.destroy();
+
+    chartEvolucionInstance = new Chart(chartEvolucionCanvas, {
+        type: 'bar',
+        data: {
+            labels: mesesLabels,
+            datasets: [
+                {
+                    label: 'Ingresos',
+                    data: ingresosData,
+                    backgroundColor: '#10b981',
+                    borderRadius: 6
+                },
+                {
+                    label: 'Gastos',
+                    data: gastosData,
+                    backgroundColor: '#ef4444',
+                    borderRadius: 6
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#a1a1aa', font: { size: 10 } }
+                },
+                y: {
+                    grid: { color: '#27272a' },
+                    ticks: {
+                        color: '#a1a1aa',
+                        font: { size: 10 },
+                        callback: function(value) {
+                            return '$' + (value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value);
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { color: '#f4f4f5', font: { size: 11 }, boxWidth: 12 }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return ` ${context.dataset.label}: ${formatearDinero(context.raw)}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 // ==========================================
-// 12. AGREGAR NUEVO MOVIMIENTO CON CUOTAS
+// 14. MODAL MOVIMIENTO (ALTA Y EDICIÓN)
 // ==========================================
 function setModalType(tipo) {
     selectedType = tipo;
     if (tipo === 'gasto') {
         switchGasto.classList.add('active');
         switchIngreso.classList.remove('active');
-        if (metodoInput.value === 'Crédito') installmentsRow.style.display = 'block';
+        if (metodoInput.value === 'Crédito' && !editIdInput.value) {
+            installmentsRow.style.display = 'block';
+        }
     } else {
         switchIngreso.classList.add('active');
         switchGasto.classList.remove('active');
@@ -976,6 +1209,9 @@ btnOpenModal.addEventListener('click', () => {
     form.reset();
     setDefaultDate();
     setModalType('gasto');
+    editIdInput.value = '';
+    modalTitle.textContent = 'Nuevo Movimiento';
+    btnSaveMovement.textContent = 'Guardar Movimiento';
     installmentsRow.style.display = 'none';
     currentTicketBase64 = null;
     ticketPreviewBox.style.display = 'none';
@@ -984,6 +1220,41 @@ btnOpenModal.addEventListener('click', () => {
     modalBackdrop.classList.add('open');
     setTimeout(() => montoInput.focus(), 150);
 });
+
+// Función para abrir modal en Modo Edición
+function editarMovimiento(id) {
+    const mov = movimientos.find(m => m.id === id);
+    if (!mov) return;
+
+    form.reset();
+    editIdInput.value = mov.id;
+    modalTitle.textContent = 'Editar Movimiento';
+    btnSaveMovement.textContent = 'Guardar Cambios';
+
+    setModalType(mov.tipo);
+    montoInput.value = mov.monto;
+    descripcionInput.value = mov.descripcion;
+    categoriaInput.value = mov.categoria;
+    metodoInput.value = mov.metodo || 'Efectivo';
+    fechaInput.value = mov.fecha || '';
+
+    // En edición no permitimos alterar el número de cuotas (para no corromper la proyección)
+    installmentsRow.style.display = 'none';
+
+    if (mov.ticket) {
+        currentTicketBase64 = mov.ticket;
+        ticketPreviewImg.src = mov.ticket;
+        ticketPreviewBox.style.display = 'flex';
+        labelTicketStatus.textContent = 'Ticket cargado ✓';
+    } else {
+        currentTicketBase64 = null;
+        ticketPreviewBox.style.display = 'none';
+        labelTicketStatus.textContent = 'Subir foto';
+    }
+
+    modalBackdrop.classList.add('open');
+    setTimeout(() => montoInput.focus(), 150);
+}
 
 btnCloseModal.addEventListener('click', () => modalBackdrop.classList.remove('open'));
 modalBackdrop.addEventListener('click', (e) => {
@@ -995,57 +1266,81 @@ form.addEventListener('submit', (e) => {
 
     const montoCalculado = evaluarMontoMatematico(montoInput.value);
     if (isNaN(montoCalculado) || montoCalculado <= 0) {
-        alert('Por favor ingresá un monto válido (ej: 2500 o 1500+1000).');
+        mostrarToast('Ingresá un monto válido (ej: 2500 o 1500+1000).', 'error');
         return;
     }
 
     const fechaSeleccionada = fechaInput.value;
-    const numCuotas = (selectedType === 'gasto' && metodoInput.value === 'Crédito') 
-        ? parseInt(cuotasSelect.value, 10) 
-        : 1;
+    const esEdicion = Boolean(editIdInput.value);
 
-    // Si es en cuotas, proyectamos los gastos en cada mes correspondiente
-    if (numCuotas > 1) {
-        const montoPorCuota = Math.round((montoCalculado / numCuotas) * 100) / 100;
-        const [baseY, baseM, baseD] = fechaSeleccionada.split('-').map(Number);
+    if (esEdicion) {
+        // ACTUALIZAR MOVIMIENTO EXISTENTE
+        const idAEditar = parseInt(editIdInput.value, 10);
+        const index = movimientos.findIndex(m => m.id === idAEditar);
 
-        for (let i = 0; i < numCuotas; i++) {
-            // Fecha para el mes correspondiente (i meses después)
-            const cuotaDate = new Date(baseY, (baseM - 1) + i, baseD);
-            const cY = cuotaDate.getFullYear();
-            const cM = String(cuotaDate.getMonth() + 1).padStart(2, '0');
-            const cD = String(cuotaDate.getDate()).padStart(2, '0');
-            const cuotaFechaStr = `${cY}-${cM}-${cD}`;
+        if (index !== -1) {
+            movimientos[index].monto = montoCalculado;
+            movimientos[index].descripcion = descripcionInput.value.trim();
+            movimientos[index].tipo = selectedType;
+            movimientos[index].categoria = categoriaInput.value;
+            movimientos[index].metodo = metodoInput.value;
+            movimientos[index].fecha = fechaSeleccionada;
+            movimientos[index].ticket = currentTicketBase64;
 
-            movimientos.push({
-                id: Date.now() + i,
-                descripcion: descripcionInput.value.trim(),
-                monto: montoPorCuota,
-                tipo: 'gasto',
-                categoria: categoriaInput.value,
-                metodo: 'Crédito',
-                fecha: cuotaFechaStr,
-                cuotaActual: i + 1,
-                cuotasTotales: numCuotas,
-                ticket: (i === 0) ? currentTicketBase64 : null // Adjuntar ticket solo a cuota 1
-            });
+            guardarEnMemoria();
+            mostrarToast('Movimiento actualizado con éxito.', 'success');
         }
     } else {
-        movimientos.push({
-            id: Date.now(),
-            descripcion: descripcionInput.value.trim(),
-            monto: montoCalculado,
-            tipo: selectedType,
-            categoria: categoriaInput.value,
-            metodo: metodoInput.value,
-            fecha: fechaSeleccionada,
-            cuotaActual: 1,
-            cuotasTotales: 1,
-            ticket: currentTicketBase64
-        });
-    }
+        // CREAR NUEVO MOVIMIENTO
+        const numCuotas = (selectedType === 'gasto' && metodoInput.value === 'Crédito') 
+            ? parseInt(cuotasSelect.value, 10) 
+            : 1;
 
-    guardarEnMemoria();
+        if (numCuotas > 1) {
+            const grupoCuotaId = Date.now();
+            const montoPorCuota = Math.round((montoCalculado / numCuotas) * 100) / 100;
+            const [baseY, baseM, baseD] = fechaSeleccionada.split('-').map(Number);
+
+            for (let i = 0; i < numCuotas; i++) {
+                const cuotaDate = new Date(baseY, (baseM - 1) + i, baseD);
+                const cY = cuotaDate.getFullYear();
+                const cM = String(cuotaDate.getMonth() + 1).padStart(2, '0');
+                const cD = String(cuotaDate.getDate()).padStart(2, '0');
+                const cuotaFechaStr = `${cY}-${cM}-${cD}`;
+
+                movimientos.push({
+                    id: Date.now() + i,
+                    grupoCuotaId: grupoCuotaId,
+                    descripcion: descripcionInput.value.trim(),
+                    monto: montoPorCuota,
+                    tipo: 'gasto',
+                    categoria: categoriaInput.value,
+                    metodo: 'Crédito',
+                    fecha: cuotaFechaStr,
+                    cuotaActual: i + 1,
+                    cuotasTotales: numCuotas,
+                    ticket: (i === 0) ? currentTicketBase64 : null
+                });
+            }
+            mostrarToast(`Compra en ${numCuotas} cuotas agendada con éxito.`, 'success');
+        } else {
+            movimientos.push({
+                id: Date.now(),
+                descripcion: descripcionInput.value.trim(),
+                monto: montoCalculado,
+                tipo: selectedType,
+                categoria: categoriaInput.value,
+                metodo: metodoInput.value,
+                fecha: fechaSeleccionada,
+                cuotaActual: 1,
+                cuotasTotales: 1,
+                ticket: currentTicketBase64
+            });
+            mostrarToast('Movimiento agregado con éxito.', 'success');
+        }
+
+        guardarEnMemoria();
+    }
 
     if (fechaSeleccionada) {
         const [y, m] = fechaSeleccionada.split('-');
@@ -1057,19 +1352,36 @@ form.addEventListener('submit', (e) => {
     actualizarPantalla();
 });
 
+// Eliminación inteligente con soporte para grupo de cuotas
 function eliminarMovimiento(id) {
-    if (confirm('¿Eliminar este movimiento?')) {
-        movimientos = movimientos.filter(m => m.id !== id);
-        guardarEnMemoria();
-        actualizarPantalla();
+    const mov = movimientos.find(m => m.id === id);
+    if (!mov) return;
+
+    if (mov.cuotasTotales > 1 && mov.grupoCuotaId) {
+        const borrarTodas = confirm(`Este gasto forma parte de una compra en ${mov.cuotasTotales} cuotas.\n\n¿Querés eliminar TODAS las cuotas de esta compra?\n(Aceptar = Borrar todas las cuotas | Cancelar = Borrar únicamente la de este mes)`);
+
+        if (borrarTodas) {
+            movimientos = movimientos.filter(m => m.grupoCuotaId !== mov.grupoCuotaId);
+            mostrarToast('Todas las cuotas de la compra fueron eliminadas.', 'info');
+        } else {
+            movimientos = movimientos.filter(m => m.id !== id);
+            mostrarToast('Se eliminó la cuota de este mes.', 'info');
+        }
+    } else {
+        if (confirm('¿Eliminar este movimiento?')) {
+            movimientos = movimientos.filter(m => m.id !== id);
+            mostrarToast('Movimiento eliminado.', 'info');
+        } else {
+            return;
+        }
     }
+
+    guardarEnMemoria();
+    actualizarPantalla();
 }
 
 // ==========================================
-// 13. PESTAÑAS (MOVIMIENTOS / STATS / METAS)
-// ==========================================
-// ==========================================
-// 13. PESTAÑAS (MOVIMIENTOS / STATS / METAS / AMIGOS)
+// 15. GESTIÓN DE PESTAÑAS
 // ==========================================
 function switchTab(activeBtn, activePanel) {
     [tabBtnHistory, tabBtnCharts, tabBtnGoals, tabBtnFriends].forEach(b => b.classList.remove('active'));
@@ -1082,6 +1394,7 @@ tabBtnHistory.addEventListener('click', () => switchTab(tabBtnHistory, viewHisto
 tabBtnCharts.addEventListener('click', () => {
     switchTab(tabBtnCharts, viewCharts);
     if (chartInstance) chartInstance.resize();
+    if (chartEvolucionInstance) chartEvolucionInstance.resize();
 });
 tabBtnGoals.addEventListener('click', () => {
     switchTab(tabBtnGoals, viewGoals);
@@ -1093,7 +1406,7 @@ tabBtnFriends.addEventListener('click', () => {
     renderSplitView();
 });
 
-// Sub-pestañas Amigos (Me Deben / Dividir Salida)
+// Sub-pestañas Amigos
 subtabDebts.addEventListener('click', () => {
     subtabDebts.classList.add('active');
     subtabSplit.classList.remove('active');
@@ -1108,9 +1421,9 @@ subtabSplit.addEventListener('click', () => {
     subviewDebts.classList.remove('active');
 });
 
-// ------------------------------------------
-// LÓGICA: CONTROL DE DEUDAS (ME DEBEN)
-// ------------------------------------------
+// ==========================================
+// 16. CONTROL DE DEUDAS (ME DEBEN)
+// ==========================================
 btnNewDebt.addEventListener('click', () => {
     debtForm.reset();
     debtModal.classList.add('open');
@@ -1144,11 +1457,11 @@ debtForm.addEventListener('submit', (e) => {
     guardarEnMemoria();
     debtModal.classList.remove('open');
     renderDeudas();
+    mostrarToast(`Deuda de ${amigo} anotada correctamente.`);
 });
 
 function renderDeudas() {
     debtsList.innerHTML = '';
-
     let totalPendiente = 0;
 
     if (deudasAmigos.length === 0) {
@@ -1167,8 +1480,8 @@ function renderDeudas() {
         div.innerHTML = `
             <div class="debt-card-top">
                 <div>
-                    <span class="debt-friend-name">👤 ${debt.amigo}</span>
-                    <span class="debt-concept"> • ${debt.concepto}</span>
+                    <span class="debt-friend-name">👤 ${escaparHTML(debt.amigo)}</span>
+                    <span class="debt-concept"> • ${escaparHTML(debt.concepto)}</span>
                 </div>
                 <button class="btn-delete" onclick="eliminarDeuda(${debt.id})" title="Eliminar deuda">✕</button>
             </div>
@@ -1217,7 +1530,6 @@ debtPaymentForm.addEventListener('submit', (e) => {
     if (debt) {
         debt.pagado = (debt.pagado || 0) + abono;
 
-        // Si tildó la opción, sumarlo automáticamente a los ingresos del mes
         if (paymentAddToBalance.checked) {
             const hoy = new Date();
             const yyyy = hoy.getFullYear();
@@ -1242,7 +1554,7 @@ debtPaymentForm.addEventListener('submit', (e) => {
         guardarEnMemoria();
         renderDeudas();
         debtPaymentModal.classList.remove('open');
-        alert(`¡Se registró el pago de ${formatearDinero(abono)} de ${debt.amigo}!`);
+        mostrarToast(`¡Se registró el cobro de ${formatearDinero(abono)} de ${debt.amigo}!`, 'success');
     }
 });
 
@@ -1251,18 +1563,19 @@ function eliminarDeuda(id) {
         deudasAmigos = deudasAmigos.filter(d => d.id !== id);
         guardarEnMemoria();
         renderDeudas();
+        mostrarToast('Deuda eliminada.', 'info');
     }
 }
 
-// ------------------------------------------
-// LÓGICA: DIVIDIR SALIDA GRUPAL (SPLITWISE)
-// ------------------------------------------
+// ==========================================
+// 17. DIVIDIR SALIDA GRUPAL Y ENLACE A DEUDAS
+// ==========================================
 btnAddSplitPerson.addEventListener('click', () => {
     const nombre = splitNameInput.value.trim();
     const puso = parseFloat(splitPaidInput.value) || 0;
 
     if (!nombre) {
-        alert('Ingresá el nombre de tu amigo/a.');
+        mostrarToast('Ingresá el nombre de tu amigo/a.', 'warning');
         return;
     }
 
@@ -1278,6 +1591,7 @@ btnAddSplitPerson.addEventListener('click', () => {
 
     guardarEnMemoria();
     renderSplitView();
+    mostrarToast(`${nombre} agregado a la salida.`);
 });
 
 btnResetSplit.addEventListener('click', () => {
@@ -1286,6 +1600,7 @@ btnResetSplit.addEventListener('click', () => {
         splitParticipantes = [];
         guardarEnMemoria();
         renderSplitView();
+        mostrarToast('Calculadora de salida reiniciada.', 'info');
     }
 });
 
@@ -1295,7 +1610,25 @@ function eliminarPersonaSplit(id) {
     renderSplitView();
 }
 
-// Algoritmo de liquidación óptima de deudas grupales
+// Función directa para pasar una liquidación de la salida a "Me Deben"
+function anotarDeudaDesdeSalida(amigo, monto) {
+    deudasAmigos.push({
+        id: Date.now(),
+        amigo: amigo,
+        monto: monto,
+        pagado: 0,
+        concepto: 'Salida grupal',
+        fecha: new Date().toISOString().split('T')[0]
+    });
+
+    guardarEnMemoria();
+    renderDeudas();
+
+    // Llevar automáticamente al usuario a la subpestaña "Me Deben"
+    subtabDebts.click();
+    mostrarToast(`¡Deuda de ${amigo} por ${formatearDinero(monto)} anotada en "Me Deben"!`, 'success');
+}
+
 function renderSplitView() {
     splitPeopleList.innerHTML = '';
 
@@ -1312,7 +1645,7 @@ function renderSplitView() {
         const li = document.createElement('li');
         li.className = 'split-person-item';
         li.innerHTML = `
-            <span>👤 <strong>${p.nombre}</strong></span>
+            <span>👤 <strong>${escaparHTML(p.nombre)}</strong></span>
             <div style="display:flex; align-items:center; gap:8px;">
                 <span style="color:#22c55e; font-weight:700;">puso ${formatearDinero(p.puso)}</span>
                 <button class="btn-delete" onclick="eliminarPersonaSplit(${p.id})">✕</button>
@@ -1328,11 +1661,8 @@ function renderSplitView() {
     splitTotalSum.textContent = formatearDinero(sumaTotal);
     splitFairShare.textContent = `${formatearDinero(cuotaPorPersona)} por persona`;
 
-    // Calcular balances: cuánto puso - cuánto le correspondía
-    // balance > 0 => le deben plata
-    // balance < 0 => tiene que pagar
-    const acreedores = []; // Los que deben recibir
-    const deudores = [];   // Los que deben pagar
+    const acreedores = [];
+    const deudores = [];
 
     splitParticipantes.forEach(p => {
         const balance = Math.round((p.puso - cuotaPorPersona) * 100) / 100;
@@ -1350,12 +1680,11 @@ function renderSplitView() {
     let j = 0;
     while (i < deudores.length && j < acreedores.length) {
         const montoTransferir = Math.min(deudores[i].monto, acreedores[j].monto);
-        const trans = {
+        transferencias.push({
             de: deudores[i].nombre,
             para: acreedores[j].nombre,
             monto: montoTransferir
-        };
-        transferencias.push(trans);
+        });
 
         deudores[i].monto -= montoTransferir;
         acreedores[j].monto -= montoTransferir;
@@ -1376,13 +1705,19 @@ function renderSplitView() {
             const li = document.createElement('li');
             li.className = 'split-settlement-item';
             li.innerHTML = `
-                <span><strong>${t.de}</strong> le paga a <strong>${t.para}</strong></span>
-                <span style="color:var(--yellow); font-weight:700;">${formatearDinero(t.monto)}</span>
+                <div>
+                    <strong>${escaparHTML(t.de)}</strong> le pasa a <strong>${escaparHTML(t.para)}</strong>
+                </div>
+                <div class="split-settlement-actions">
+                    <span style="color:var(--yellow); font-weight:700;">${formatearDinero(t.monto)}</span>
+                    <button type="button" class="btn-add-debt-from-split" onclick="anotarDeudaDesdeSalida('${escaparHTML(t.de)}', ${t.monto})" title="Anotar esta deuda en 'Me Deben'">
+                        ➕ Anotar deuda
+                    </button>
+                </div>
             `;
             splitSettlementList.appendChild(li);
         });
 
-        // Generar texto para compartir por WhatsApp
         btnCopySplit.onclick = () => {
             let msg = `🍻 *CUENTAS DE LA SALIDA*\n`;
             msg += `• Gasto Total: ${formatearDinero(sumaTotal)}\n`;
@@ -1394,7 +1729,7 @@ function renderSplitView() {
             msg += `\n_Calculado con Edgar Finanzas PRO 💎_`;
 
             navigator.clipboard.writeText(msg).then(() => {
-                alert('¡Liquidación copiada al portapapeles! Ya la podés pegar en WhatsApp.');
+                mostrarToast('¡Liquidación copiada al portapapeles para WhatsApp!', 'success');
             }).catch(() => {
                 prompt('Copiá el texto para WhatsApp:', msg);
             });
@@ -1402,12 +1737,17 @@ function renderSplitView() {
     }
 }
 
+// Filtros de búsqueda en tiempo real
+busquedaInput.addEventListener('input', actualizarPantalla);
+filtroCategoria.addEventListener('change', actualizarPantalla);
+filtroMetodo.addEventListener('change', actualizarPantalla);
+
 // ==========================================
-// 14. EXPORTAR A EXCEL (CSV) Y RESPALDO COMPLETO
+// 18. EXPORTAR A EXCEL (CSV) Y RESPALDO
 // ==========================================
 btnExportCsv.addEventListener('click', () => {
     if (movimientos.length === 0) {
-        alert('No tenés movimientos para exportar.');
+        mostrarToast('No tenés movimientos para exportar.', 'warning');
         return;
     }
 
@@ -1416,7 +1756,7 @@ btnExportCsv.addEventListener('click', () => {
         const catObj = categorias.find(c => c.id === m.categoria);
         const catName = catObj ? catObj.nombre : (m.categoria || '');
         const cuotaStr = (m.cuotasTotales > 1) ? `${m.cuotaActual}/${m.cuotasTotales}` : '1';
-        csv += `"${m.fecha || ''}";"${m.tipo}";"${m.descripcion}";"${catName}";"${m.metodo || ''}";"${cuotaStr}";"${m.monto}"\n`;
+        csv += `"${m.fecha || ''}";"${m.tipo}";"${escaparHTML(m.descripcion)}";"${catName}";"${m.metodo || ''}";"${cuotaStr}";"${m.monto}"\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1426,11 +1766,13 @@ btnExportCsv.addEventListener('click', () => {
     link.download = `finanzas_backup_${getPeriodKey()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+    mostrarToast('Reporte CSV descargado con éxito.');
 });
 
 // Modal Ajustes y Respaldo
 btnBackup.addEventListener('click', () => {
     checkPinLock();
+    actualizarIndicadorAlmacenamiento();
     backupModal.classList.add('open');
 });
 btnCloseBackup.addEventListener('click', () => backupModal.classList.remove('open'));
@@ -1438,7 +1780,6 @@ backupModal.addEventListener('click', (e) => {
     if (e.target === backupModal) backupModal.classList.remove('open');
 });
 
-// Administrar Categorías
 btnOpenCategories.addEventListener('click', () => {
     backupModal.classList.remove('open');
     categoriesModal.classList.add('open');
@@ -1458,16 +1799,19 @@ btnDownloadBackup.addEventListener('click', () => {
         splitParticipantes,
         gastosFijos,
         categorias,
-        fechaExportacion: new Date().toISOString()
+        usarSaldoAcumulado,
+        fechaExportacion: new Date().toISOString(),
+        version: '6.0'
     };
     const jsonStr = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `respaldo_finanzas_pro_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `respaldo_finanzas_v6_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     URL.revokeObjectURL(url);
+    mostrarToast('Copia de respaldo JSON descargada.');
 });
 
 // Restaurar Copia JSON
@@ -1487,18 +1831,22 @@ fileRestore.addEventListener('change', (e) => {
                 splitParticipantes = parsed.splitParticipantes || [];
                 gastosFijos = parsed.gastosFijos || [];
                 if (Array.isArray(parsed.categorias)) categorias = parsed.categorias;
+                if (typeof parsed.usarSaldoAcumulado === 'boolean') {
+                    usarSaldoAcumulado = parsed.usarSaldoAcumulado;
+                    if (switchSaldoAcumulado) switchSaldoAcumulado.checked = usarSaldoAcumulado;
+                }
                 guardarEnMemoria();
                 actualizarSelectoresCategorias();
                 actualizarPantalla();
                 renderDeudas();
                 renderSplitView();
                 backupModal.classList.remove('open');
-                alert('¡Copia de respaldo restaurada con éxito!');
+                mostrarToast('¡Copia de respaldo restaurada con éxito!', 'success');
             } else {
-                alert('El archivo no contiene un formato de respaldo válido.');
+                mostrarToast('El archivo no tiene un formato válido.', 'error');
             }
         } catch {
-            alert('Error al leer el archivo de respaldo.');
+            mostrarToast('Error al leer el archivo de respaldo.', 'error');
         }
     };
     reader.readAsText(file);
@@ -1520,12 +1868,12 @@ btnClearAll.addEventListener('click', () => {
         renderDeudas();
         renderSplitView();
         backupModal.classList.remove('open');
-        alert('Se borraron todos los datos.');
+        mostrarToast('Se borraron todos los datos.', 'info');
     }
 });
 
 // ==========================================
-// 15. ACERCA DE LA APP Y GESTIÓN DE ACTUALIZACIONES
+// 19. ACERCA DE LA APP Y ACTUALIZACIONES
 // ==========================================
 const btnOpenAbout = document.getElementById('btn-open-about');
 const aboutModal = document.getElementById('about-modal');
@@ -1543,7 +1891,6 @@ aboutModal.addEventListener('click', (e) => {
     if (e.target === aboutModal) aboutModal.classList.remove('open');
 });
 
-// Función para forzar limpieza de caché y traer la última versión de GitHub
 async function forzarActualizacion() {
     if (confirm('Se limpiará la memoria caché de la app para descargar la última versión de GitHub. ¿Continuar?')) {
         if ('caches' in window) {
@@ -1556,7 +1903,6 @@ async function forzarActualizacion() {
                 await reg.unregister();
             }
         }
-        // Recargar desde servidor saltando caché
         window.location.reload(true);
     }
 }
@@ -1565,8 +1911,9 @@ btnForceUpdate.addEventListener('click', forzarActualizacion);
 btnCheckUpdates.addEventListener('click', forzarActualizacion);
 
 // ==========================================
-// 16. INICIALIZACIÓN
+// 20. INICIALIZACIÓN
 // ==========================================
 actualizarSelectoresCategorias();
 actualizarPantalla();
 checkPinLock();
+actualizarIndicadorAlmacenamiento();
