@@ -3,6 +3,8 @@
 Aplicación web progresiva (PWA) de finanzas personales y control de gastos desarrollada por Edgar.
 
 ## Características
+- 👥 **Gestión de Amigos y Deudas:** Control exacto de quién te debe plata, cuánto te pagó, saldo pendiente y registro de cobros.
+- 🍻 **Dividir Salidas (Estilo Splitwise):** Calculadora grupal para salidas donde cada uno puso montos distintos (ej: vos 30.000, tus amigos 20.000 y 15.000), calcula automáticamente quién le paga a quién para quedar parejos y genera el texto listo para enviar a WhatsApp.
 - 📱 **PWA Offline:** Se instala directamente desde el navegador en Android / iPhone y funciona sin conexión.
 - 🔒 **Seguridad con PIN:** Bloqueo de 4 dígitos para proteger tu privacidad.
 - 💳 **Compras en Cuotas:** Agendamiento y proyección automática mes a mes de cuotas con tarjeta de crédito.

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'edgar-finanzas-v2';
+const CACHE_NAME = 'edgar-finanzas-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

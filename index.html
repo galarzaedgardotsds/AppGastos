@@ -116,11 +116,12 @@
             <button id="btn-apply-recurring" class="btn-sm-primary">Cargar</button>
         </div>
 
-        <!-- Pestañas Principales (Movimientos, Estadísticas, Metas) -->
+        <!-- Pestañas Principales (Movimientos, Estadísticas, Metas, Amigos) -->
         <div class="tab-switcher">
             <button id="tab-btn-history" class="tab-btn active">📝 Movimientos</button>
-            <button id="tab-btn-charts" class="tab-btn">📊 Estadísticas</button>
+            <button id="tab-btn-charts" class="tab-btn">📊 Gráficos</button>
             <button id="tab-btn-goals" class="tab-btn">🎯 Metas</button>
+            <button id="tab-btn-friends" class="tab-btn">👥 Amigos</button>
         </div>
 
         <!-- Vista 1: Historial de Movimientos -->
@@ -168,6 +169,71 @@
             </div>
             <div id="goals-list" class="goals-list">
                 <!-- Tarjetas de metas con progreso -->
+            </div>
+        </section>
+
+        <!-- Vista 4: Amigos (Deudas y División de Gastos Grupales) -->
+        <section id="view-friends" class="view-panel">
+            <!-- Sub-pestañas: Me Deben vs Dividir Salida -->
+            <div class="friends-subtabs">
+                <button id="subtab-debts" class="subtab-btn active">💸 Me Deben</button>
+                <button id="subtab-split" class="subtab-btn">🍻 Dividir Salida</button>
+            </div>
+
+            <!-- Subvista 4A: Deudas Personales (Cuánto me deben / abonos / saldo pendiente) -->
+            <div id="subview-debts" class="friends-subpanel active">
+                <div class="debts-summary-card">
+                    <span class="debts-summary-label">Total que te deben tus amigos</span>
+                    <h3 id="debts-total-pending">$0,00</h3>
+                    <button id="btn-new-debt" class="btn-submit" style="margin-top:10px; padding:10px;">+ Anotar Deuda / Préstamo</button>
+                </div>
+
+                <div id="debts-list" class="debts-list">
+                    <!-- Tarjetas de deudas cargadas dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Subvista 4B: Calculadora División de Salidas (Splitwise) -->
+            <div id="subview-split" class="friends-subpanel">
+                <div class="split-calculator-card">
+                    <div class="split-header">
+                        <div>
+                            <h4>🍻 Dividir Cuenta Grupal</h4>
+                            <p class="split-desc">Cada uno pone lo que gastó y calculamos quién le paga a quién para quedar parejos.</p>
+                        </div>
+                        <button id="btn-reset-split" class="btn-text" style="color:#ef4444;">Reiniciar</button>
+                    </div>
+
+                    <div class="split-add-person">
+                        <input type="text" id="split-name-input" placeholder="Nombre (ej: Edgar, Lucas)">
+                        <input type="number" id="split-paid-input" placeholder="Puso ($) ej: 30000" step="any" min="0">
+                        <button type="button" id="btn-add-split-person" class="btn-sm-primary">+ Agregar</button>
+                    </div>
+
+                    <!-- Lista de personas agregadas a la salida -->
+                    <ul id="split-people-list" class="split-people-list"></ul>
+
+                    <!-- Resumen del Gasto Total y Cuota por Persona -->
+                    <div id="split-totals-box" class="split-totals-box" style="display:none;">
+                        <div class="split-total-row">
+                            <span>Gasto Total de la Noche:</span>
+                            <strong id="split-total-sum">$0,00</strong>
+                        </div>
+                        <div class="split-total-row">
+                            <span>Cada uno debe poner:</span>
+                            <strong id="split-fair-share" style="color:var(--yellow);">$0,00</strong>
+                        </div>
+                    </div>
+
+                    <!-- Resolución exacta: Quién le paga a quién -->
+                    <div id="split-settlement-box" class="split-settlement-box" style="display:none;">
+                        <h5>🤝 ¿Cómo saldar las cuentas?</h5>
+                        <ul id="split-settlement-list" class="split-settlement-list"></ul>
+                        <button type="button" id="btn-copy-split" class="btn-secondary" style="margin-top:12px;">
+                            📋 Copiar liquidación para WhatsApp
+                        </button>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -378,6 +444,56 @@
                 <div class="ticket-full-box">
                     <img id="ticket-full-img" alt="Comprobante en grande">
                 </div>
+            </div>
+        </div>
+
+        <!-- Modal de Nueva Deuda -->
+        <div id="debt-modal" class="modal-backdrop">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3 id="debt-modal-title">💸 Anotar Deuda / Préstamo</h3>
+                    <button id="btn-close-debt" class="btn-close-modal">✕</button>
+                </div>
+                <form id="debt-form">
+                    <div class="input-group">
+                        <label for="debt-friend-name">¿Quién te debe? (Amigo/a)</label>
+                        <input type="text" id="debt-friend-name" placeholder="Ej: Lucas, Mateo, Sofi..." required>
+                    </div>
+                    <div class="input-group">
+                        <label for="debt-amount">Monto que te debe ($)</label>
+                        <input type="number" id="debt-amount" placeholder="Ej: 15000" step="any" min="1" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="debt-concept">Concepto / Motivo</label>
+                        <input type="text" id="debt-concept" placeholder="Ej: Cena del viernes, Entrada boliche..." required>
+                    </div>
+                    <button type="submit" class="btn-submit">Guardar Deuda</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Registrar Pago / Abono de Deuda -->
+        <div id="debt-payment-modal" class="modal-backdrop">
+            <div class="modal-sheet">
+                <div class="modal-header">
+                    <h3 id="payment-modal-title">Registrar Pago</h3>
+                    <button id="btn-close-payment" class="btn-close-modal">✕</button>
+                </div>
+                <form id="debt-payment-form">
+                    <input type="hidden" id="payment-debt-id">
+                    <p id="payment-debt-summary" class="backup-desc"></p>
+                    <div class="input-group">
+                        <label for="payment-amount">Monto que te transfirió / pagó ($)</label>
+                        <input type="number" id="payment-amount" placeholder="0.00" step="any" min="1" required>
+                    </div>
+                    <div class="input-group">
+                        <label>
+                            <input type="checkbox" id="payment-add-to-balance" checked style="margin-right:6px; accent-color:var(--primary);">
+                            Sumar este pago a mis ingresos del mes automáticamente
+                        </label>
+                    </div>
+                    <button type="submit" class="btn-submit">Registrar Cobro</button>
+                </form>
             </div>
         </div>
 

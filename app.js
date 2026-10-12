@@ -15,6 +15,8 @@ if ('serviceWorker' in navigator) {
 let movimientos = JSON.parse(localStorage.getItem('mis_movimientos')) || [];
 let presupuestos = JSON.parse(localStorage.getItem('mis_presupuestos')) || {}; // { 'YYYY-MM': monto }
 let metasAhorro = JSON.parse(localStorage.getItem('mis_metas')) || []; // [{ id, nombre, objetivo, actual }]
+let deudasAmigos = JSON.parse(localStorage.getItem('mis_deudas_amigos')) || []; // [{ id, amigo, monto, pagado, concepto, fecha }]
+let splitParticipantes = JSON.parse(localStorage.getItem('split_participantes')) || []; // [{ id, nombre, puso }]
 let gastosFijos = JSON.parse(localStorage.getItem('mis_gastos_fijos')) || []; // [{ id, desc, monto, cat, metodo }]
 let gastosFijosCargados = JSON.parse(localStorage.getItem('fijos_cargados_meses')) || {}; // { 'YYYY-MM': true }
 let userPin = localStorage.getItem('app_pin') || null;
@@ -43,6 +45,8 @@ function guardarEnMemoria() {
     localStorage.setItem('mis_movimientos', JSON.stringify(movimientos));
     localStorage.setItem('mis_presupuestos', JSON.stringify(presupuestos));
     localStorage.setItem('mis_metas', JSON.stringify(metasAhorro));
+    localStorage.setItem('mis_deudas_amigos', JSON.stringify(deudasAmigos));
+    localStorage.setItem('split_participantes', JSON.stringify(splitParticipantes));
     localStorage.setItem('mis_gastos_fijos', JSON.stringify(gastosFijos));
     localStorage.setItem('fijos_cargados_meses', JSON.stringify(gastosFijosCargados));
     localStorage.setItem('mis_categorias', JSON.stringify(categorias));
@@ -196,9 +200,50 @@ const btnApplyRecurring = document.getElementById('btn-apply-recurring');
 const tabBtnHistory = document.getElementById('tab-btn-history');
 const tabBtnCharts = document.getElementById('tab-btn-charts');
 const tabBtnGoals = document.getElementById('tab-btn-goals');
+const tabBtnFriends = document.getElementById('tab-btn-friends');
 const viewHistory = document.getElementById('view-history');
 const viewCharts = document.getElementById('view-charts');
 const viewGoals = document.getElementById('view-goals');
+const viewFriends = document.getElementById('view-friends');
+
+// Sub-pestañas Amigos
+const subtabDebts = document.getElementById('subtab-debts');
+const subtabSplit = document.getElementById('subtab-split');
+const subviewDebts = document.getElementById('subview-debts');
+const subviewSplit = document.getElementById('subview-split');
+
+// Deudas (Me Deben)
+const debtsTotalPending = document.getElementById('debts-total-pending');
+const debtsList = document.getElementById('debts-list');
+const btnNewDebt = document.getElementById('btn-new-debt');
+const debtModal = document.getElementById('debt-modal');
+const btnCloseDebt = document.getElementById('btn-close-debt');
+const debtForm = document.getElementById('debt-form');
+const debtFriendName = document.getElementById('debt-friend-name');
+const debtAmount = document.getElementById('debt-amount');
+const debtConcept = document.getElementById('debt-concept');
+
+// Cobro de Deuda
+const debtPaymentModal = document.getElementById('debt-payment-modal');
+const btnClosePayment = document.getElementById('btn-close-payment');
+const debtPaymentForm = document.getElementById('debt-payment-form');
+const paymentDebtId = document.getElementById('payment-debt-id');
+const paymentDebtSummary = document.getElementById('payment-debt-summary');
+const paymentAmount = document.getElementById('payment-amount');
+const paymentAddToBalance = document.getElementById('payment-add-to-balance');
+
+// División de Salida Grupal
+const splitNameInput = document.getElementById('split-name-input');
+const splitPaidInput = document.getElementById('split-paid-input');
+const btnAddSplitPerson = document.getElementById('btn-add-split-person');
+const splitPeopleList = document.getElementById('split-people-list');
+const splitTotalsBox = document.getElementById('split-totals-box');
+const splitTotalSum = document.getElementById('split-total-sum');
+const splitFairShare = document.getElementById('split-fair-share');
+const splitSettlementBox = document.getElementById('split-settlement-box');
+const splitSettlementList = document.getElementById('split-settlement-list');
+const btnCopySplit = document.getElementById('btn-copy-split');
+const btnResetSplit = document.getElementById('btn-reset-split');
 
 // Filtros y Búsqueda
 const busquedaInput = document.getElementById('busqueda-input');
@@ -1023,9 +1068,12 @@ function eliminarMovimiento(id) {
 // ==========================================
 // 13. PESTAÑAS (MOVIMIENTOS / STATS / METAS)
 // ==========================================
+// ==========================================
+// 13. PESTAÑAS (MOVIMIENTOS / STATS / METAS / AMIGOS)
+// ==========================================
 function switchTab(activeBtn, activePanel) {
-    [tabBtnHistory, tabBtnCharts, tabBtnGoals].forEach(b => b.classList.remove('active'));
-    [viewHistory, viewCharts, viewGoals].forEach(p => p.classList.remove('active'));
+    [tabBtnHistory, tabBtnCharts, tabBtnGoals, tabBtnFriends].forEach(b => b.classList.remove('active'));
+    [viewHistory, viewCharts, viewGoals, viewFriends].forEach(p => p.classList.remove('active'));
     activeBtn.classList.add('active');
     activePanel.classList.add('active');
 }
@@ -1039,10 +1087,320 @@ tabBtnGoals.addEventListener('click', () => {
     switchTab(tabBtnGoals, viewGoals);
     renderMetas();
 });
+tabBtnFriends.addEventListener('click', () => {
+    switchTab(tabBtnFriends, viewFriends);
+    renderDeudas();
+    renderSplitView();
+});
 
-busquedaInput.addEventListener('input', actualizarPantalla);
-filtroCategoria.addEventListener('change', actualizarPantalla);
-filtroMetodo.addEventListener('change', actualizarPantalla);
+// Sub-pestañas Amigos (Me Deben / Dividir Salida)
+subtabDebts.addEventListener('click', () => {
+    subtabDebts.classList.add('active');
+    subtabSplit.classList.remove('active');
+    subviewDebts.classList.add('active');
+    subviewSplit.classList.remove('active');
+});
+
+subtabSplit.addEventListener('click', () => {
+    subtabSplit.classList.add('active');
+    subtabDebts.classList.remove('active');
+    subviewSplit.classList.add('active');
+    subviewDebts.classList.remove('active');
+});
+
+// ------------------------------------------
+// LÓGICA: CONTROL DE DEUDAS (ME DEBEN)
+// ------------------------------------------
+btnNewDebt.addEventListener('click', () => {
+    debtForm.reset();
+    debtModal.classList.add('open');
+    setTimeout(() => debtFriendName.focus(), 150);
+});
+
+btnCloseDebt.addEventListener('click', () => debtModal.classList.remove('open'));
+debtModal.addEventListener('click', (e) => {
+    if (e.target === debtModal) debtModal.classList.remove('open');
+});
+
+debtForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const amigo = debtFriendName.value.trim();
+    const monto = parseFloat(debtAmount.value);
+    const concepto = debtConcept.value.trim();
+
+    if (!amigo || isNaN(monto) || monto <= 0) return;
+
+    const fechaHoy = new Date().toISOString().split('T')[0];
+
+    deudasAmigos.push({
+        id: Date.now(),
+        amigo,
+        monto,
+        pagado: 0,
+        concepto,
+        fecha: fechaHoy
+    });
+
+    guardarEnMemoria();
+    debtModal.classList.remove('open');
+    renderDeudas();
+});
+
+function renderDeudas() {
+    debtsList.innerHTML = '';
+
+    let totalPendiente = 0;
+
+    if (deudasAmigos.length === 0) {
+        debtsList.innerHTML = `<p style="text-align:center; color:#71717a; padding: 24px 0; font-size: 0.88rem;">No tenés deudas registradas. ¡Tocá "+ Anotar Deuda" cuando le prestes a un amigo!</p>`;
+        debtsTotalPending.textContent = formatearDinero(0);
+        return;
+    }
+
+    deudasAmigos.slice().reverse().forEach(debt => {
+        const falta = Math.max(0, debt.monto - (debt.pagado || 0));
+        totalPendiente += falta;
+        const estaSaldado = falta === 0;
+
+        const div = document.createElement('div');
+        div.className = `debt-card ${estaSaldado ? 'paid' : ''}`;
+        div.innerHTML = `
+            <div class="debt-card-top">
+                <div>
+                    <span class="debt-friend-name">👤 ${debt.amigo}</span>
+                    <span class="debt-concept"> • ${debt.concepto}</span>
+                </div>
+                <button class="btn-delete" onclick="eliminarDeuda(${debt.id})" title="Eliminar deuda">✕</button>
+            </div>
+            <div class="debt-amounts-row">
+                <span>Total: <strong>${formatearDinero(debt.monto)}</strong></span>
+                <span>Pagó: <strong style="color:var(--green);">${formatearDinero(debt.pagado || 0)}</strong></span>
+                <span class="debt-pending">${estaSaldado ? '✓ SALDADO' : 'Falta: ' + formatearDinero(falta)}</span>
+            </div>
+            ${!estaSaldado ? `
+            <div class="debt-actions">
+                <button class="btn-sm-primary" onclick="abrirRegistrarPago(${debt.id})">💰 Registrar Cobro / Pago</button>
+            </div>
+            ` : ''}
+        `;
+        debtsList.appendChild(div);
+    });
+
+    debtsTotalPending.textContent = formatearDinero(totalPendiente);
+}
+
+function abrirRegistrarPago(id) {
+    const debt = deudasAmigos.find(d => d.id === id);
+    if (!debt) return;
+
+    const falta = Math.max(0, debt.monto - (debt.pagado || 0));
+    paymentDebtId.value = id;
+    paymentDebtSummary.textContent = `${debt.amigo} te debe ${formatearDinero(falta)} por "${debt.concepto}".`;
+    paymentAmount.value = falta;
+    paymentAmount.max = falta;
+    debtPaymentModal.classList.add('open');
+    setTimeout(() => paymentAmount.focus(), 150);
+}
+
+btnClosePayment.addEventListener('click', () => debtPaymentModal.classList.remove('open'));
+debtPaymentModal.addEventListener('click', (e) => {
+    if (e.target === debtPaymentModal) debtPaymentModal.classList.remove('open');
+});
+
+debtPaymentForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const id = parseInt(paymentDebtId.value, 10);
+    const abono = parseFloat(paymentAmount.value);
+    if (isNaN(abono) || abono <= 0) return;
+
+    const debt = deudasAmigos.find(d => d.id === id);
+    if (debt) {
+        debt.pagado = (debt.pagado || 0) + abono;
+
+        // Si tildó la opción, sumarlo automáticamente a los ingresos del mes
+        if (paymentAddToBalance.checked) {
+            const hoy = new Date();
+            const yyyy = hoy.getFullYear();
+            const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+            const dd = String(hoy.getDate()).padStart(2, '0');
+
+            movimientos.push({
+                id: Date.now(),
+                descripcion: `Cobro deuda: ${debt.amigo} (${debt.concepto})`,
+                monto: abono,
+                tipo: 'ingreso',
+                categoria: 'Otros',
+                metodo: 'Transferencia',
+                fecha: `${yyyy}-${mm}-${dd}`,
+                cuotaActual: 1,
+                cuotasTotales: 1,
+                ticket: null
+            });
+            actualizarPantalla();
+        }
+
+        guardarEnMemoria();
+        renderDeudas();
+        debtPaymentModal.classList.remove('open');
+        alert(`¡Se registró el pago de ${formatearDinero(abono)} de ${debt.amigo}!`);
+    }
+});
+
+function eliminarDeuda(id) {
+    if (confirm('¿Eliminar este registro de deuda?')) {
+        deudasAmigos = deudasAmigos.filter(d => d.id !== id);
+        guardarEnMemoria();
+        renderDeudas();
+    }
+}
+
+// ------------------------------------------
+// LÓGICA: DIVIDIR SALIDA GRUPAL (SPLITWISE)
+// ------------------------------------------
+btnAddSplitPerson.addEventListener('click', () => {
+    const nombre = splitNameInput.value.trim();
+    const puso = parseFloat(splitPaidInput.value) || 0;
+
+    if (!nombre) {
+        alert('Ingresá el nombre de tu amigo/a.');
+        return;
+    }
+
+    splitParticipantes.push({
+        id: Date.now(),
+        nombre,
+        puso: Math.max(0, puso)
+    });
+
+    splitNameInput.value = '';
+    splitPaidInput.value = '';
+    splitNameInput.focus();
+
+    guardarEnMemoria();
+    renderSplitView();
+});
+
+btnResetSplit.addEventListener('click', () => {
+    if (splitParticipantes.length === 0) return;
+    if (confirm('¿Reiniciar la calculadora de la salida grupal?')) {
+        splitParticipantes = [];
+        guardarEnMemoria();
+        renderSplitView();
+    }
+});
+
+function eliminarPersonaSplit(id) {
+    splitParticipantes = splitParticipantes.filter(p => p.id !== id);
+    guardarEnMemoria();
+    renderSplitView();
+}
+
+// Algoritmo de liquidación óptima de deudas grupales
+function renderSplitView() {
+    splitPeopleList.innerHTML = '';
+
+    if (splitParticipantes.length === 0) {
+        splitPeopleList.innerHTML = `<li style="text-align:center; color:#71717a; padding:16px 0; font-size:0.85rem;">Agregá quiénes salieron y cuánto puso cada uno para repartir parejo.</li>`;
+        splitTotalsBox.style.display = 'none';
+        splitSettlementBox.style.display = 'none';
+        return;
+    }
+
+    let sumaTotal = 0;
+    splitParticipantes.forEach(p => {
+        sumaTotal += p.puso;
+        const li = document.createElement('li');
+        li.className = 'split-person-item';
+        li.innerHTML = `
+            <span>👤 <strong>${p.nombre}</strong></span>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="color:#22c55e; font-weight:700;">puso ${formatearDinero(p.puso)}</span>
+                <button class="btn-delete" onclick="eliminarPersonaSplit(${p.id})">✕</button>
+            </div>
+        `;
+        splitPeopleList.appendChild(li);
+    });
+
+    const cantidadPersonas = splitParticipantes.length;
+    const cuotaPorPersona = sumaTotal / cantidadPersonas;
+
+    splitTotalsBox.style.display = 'flex';
+    splitTotalSum.textContent = formatearDinero(sumaTotal);
+    splitFairShare.textContent = `${formatearDinero(cuotaPorPersona)} por persona`;
+
+    // Calcular balances: cuánto puso - cuánto le correspondía
+    // balance > 0 => le deben plata
+    // balance < 0 => tiene que pagar
+    const acreedores = []; // Los que deben recibir
+    const deudores = [];   // Los que deben pagar
+
+    splitParticipantes.forEach(p => {
+        const balance = Math.round((p.puso - cuotaPorPersona) * 100) / 100;
+        if (balance > 0.01) {
+            acreedores.push({ nombre: p.nombre, monto: balance });
+        } else if (balance < -0.01) {
+            deudores.push({ nombre: p.nombre, monto: -balance });
+        }
+    });
+
+    splitSettlementList.innerHTML = '';
+    const transferencias = [];
+
+    let i = 0;
+    let j = 0;
+    while (i < deudores.length && j < acreedores.length) {
+        const montoTransferir = Math.min(deudores[i].monto, acreedores[j].monto);
+        const trans = {
+            de: deudores[i].nombre,
+            para: acreedores[j].nombre,
+            monto: montoTransferir
+        };
+        transferencias.push(trans);
+
+        deudores[i].monto -= montoTransferir;
+        acreedores[j].monto -= montoTransferir;
+
+        if (deudores[i].monto < 0.01) i++;
+        if (acreedores[j].monto < 0.01) j++;
+    }
+
+    if (transferencias.length === 0) {
+        splitSettlementBox.style.display = 'block';
+        splitSettlementList.innerHTML = `<li class="split-settlement-item" style="color:#22c55e;">🎉 ¡Todos pusieron exactamente lo mismo! Las cuentas están saldadas.</li>`;
+        btnCopySplit.style.display = 'none';
+    } else {
+        splitSettlementBox.style.display = 'block';
+        btnCopySplit.style.display = 'block';
+
+        transferencias.forEach(t => {
+            const li = document.createElement('li');
+            li.className = 'split-settlement-item';
+            li.innerHTML = `
+                <span><strong>${t.de}</strong> le paga a <strong>${t.para}</strong></span>
+                <span style="color:var(--yellow); font-weight:700;">${formatearDinero(t.monto)}</span>
+            `;
+            splitSettlementList.appendChild(li);
+        });
+
+        // Generar texto para compartir por WhatsApp
+        btnCopySplit.onclick = () => {
+            let msg = `🍻 *CUENTAS DE LA SALIDA*\n`;
+            msg += `• Gasto Total: ${formatearDinero(sumaTotal)}\n`;
+            msg += `• Por persona (${cantidadPersonas}): ${formatearDinero(cuotaPorPersona)}\n\n`;
+            msg += `*¿Quién le paga a quién?*\n`;
+            transferencias.forEach(t => {
+                msg += `👉 ${t.de} le pasa a ${t.para}: ${formatearDinero(t.monto)}\n`;
+            });
+            msg += `\n_Calculado con Edgar Finanzas PRO 💎_`;
+
+            navigator.clipboard.writeText(msg).then(() => {
+                alert('¡Liquidación copiada al portapapeles! Ya la podés pegar en WhatsApp.');
+            }).catch(() => {
+                prompt('Copiá el texto para WhatsApp:', msg);
+            });
+        };
+    }
+}
 
 // ==========================================
 // 14. EXPORTAR A EXCEL (CSV) Y RESPALDO COMPLETO
@@ -1096,6 +1454,8 @@ btnDownloadBackup.addEventListener('click', () => {
         movimientos,
         presupuestos,
         metasAhorro,
+        deudasAmigos,
+        splitParticipantes,
         gastosFijos,
         categorias,
         fechaExportacion: new Date().toISOString()
@@ -1123,11 +1483,15 @@ fileRestore.addEventListener('change', (e) => {
                 movimientos = parsed.movimientos;
                 presupuestos = parsed.presupuestos || {};
                 metasAhorro = parsed.metasAhorro || [];
+                deudasAmigos = parsed.deudasAmigos || [];
+                splitParticipantes = parsed.splitParticipantes || [];
                 gastosFijos = parsed.gastosFijos || [];
                 if (Array.isArray(parsed.categorias)) categorias = parsed.categorias;
                 guardarEnMemoria();
                 actualizarSelectoresCategorias();
                 actualizarPantalla();
+                renderDeudas();
+                renderSplitView();
                 backupModal.classList.remove('open');
                 alert('¡Copia de respaldo restaurada con éxito!');
             } else {
@@ -1146,11 +1510,15 @@ btnClearAll.addEventListener('click', () => {
         movimientos = [];
         presupuestos = {};
         metasAhorro = [];
+        deudasAmigos = [];
+        splitParticipantes = [];
         gastosFijos = [];
         gastosFijosCargados = {};
         guardarEnMemoria();
         actualizarPantalla();
         renderMetas();
+        renderDeudas();
+        renderSplitView();
         backupModal.classList.remove('open');
         alert('Se borraron todos los datos.');
     }
