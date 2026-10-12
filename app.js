@@ -1525,7 +1525,47 @@ btnClearAll.addEventListener('click', () => {
 });
 
 // ==========================================
-// 15. INICIALIZACIÓN
+// 15. ACERCA DE LA APP Y GESTIÓN DE ACTUALIZACIONES
+// ==========================================
+const btnOpenAbout = document.getElementById('btn-open-about');
+const aboutModal = document.getElementById('about-modal');
+const btnCloseAbout = document.getElementById('btn-close-about');
+const btnForceUpdate = document.getElementById('btn-force-update');
+const btnCheckUpdates = document.getElementById('btn-check-updates');
+
+btnOpenAbout.addEventListener('click', () => {
+    backupModal.classList.remove('open');
+    aboutModal.classList.add('open');
+});
+
+btnCloseAbout.addEventListener('click', () => aboutModal.classList.remove('open'));
+aboutModal.addEventListener('click', (e) => {
+    if (e.target === aboutModal) aboutModal.classList.remove('open');
+});
+
+// Función para forzar limpieza de caché y traer la última versión de GitHub
+async function forzarActualizacion() {
+    if (confirm('Se limpiará la memoria caché de la app para descargar la última versión de GitHub. ¿Continuar?')) {
+        if ('caches' in window) {
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map(name => caches.delete(name)));
+        }
+        if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (let reg of registrations) {
+                await reg.unregister();
+            }
+        }
+        // Recargar desde servidor saltando caché
+        window.location.reload(true);
+    }
+}
+
+btnForceUpdate.addEventListener('click', forzarActualizacion);
+btnCheckUpdates.addEventListener('click', forzarActualizacion);
+
+// ==========================================
+// 16. INICIALIZACIÓN
 // ==========================================
 actualizarSelectoresCategorias();
 actualizarPantalla();

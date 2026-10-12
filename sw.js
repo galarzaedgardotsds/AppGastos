@@ -1,9 +1,9 @@
-const CACHE_NAME = 'edgar-finanzas-v4';
+const CACHE_NAME = 'edgar-finanzas-v5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './styles.css',
-  './app.js',
+  './styles.css?v=5',
+  './app.js?v=5',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -25,6 +25,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.log('Limpiando cache vieja:', key);
             return caches.delete(key);
           }
         })
@@ -34,17 +35,25 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Estrategia Network-First para archivos HTML/CSS/JS para que siempre traiga lo último si hay conexión
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      return (
-        cachedResponse ||
-        fetch(event.request).catch(() => {
-          // Offline fallback
-          return caches.match('./index.html');
-        })
-      );
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        // Si hay internet, actualizamos la caché con la versión nueva
+        if (event.request.method === 'GET' && networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        // Si no hay internet, usamos la versión en caché (modo offline)
+        return caches.match(event.request).then((cachedResponse) => {
+          return cachedResponse || caches.match('./index.html');
+        });
+      })
   );
 });
-
